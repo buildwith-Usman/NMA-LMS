@@ -4,9 +4,20 @@ import Header from '../../components/layout/Header'
 import { StatCard, StatusBadge, Badge, Table, SectionHeader, Modal, MiniStat, SelectFilter, Card, FileUploadBox, ProgressBar } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
-import { GraduationCap, Users, BookOpen, ClipboardList, FileText, CheckSquare, Star, Calendar, BarChart3, Plus, Send, Trash2 } from 'lucide-react'
+import { GraduationCap, Users, BookOpen, ClipboardList, FileText, CheckSquare, Star, Plus, Send, Trash2, Pencil, Download, UserCheck } from 'lucide-react'
 
 const PAGES = { dashboard:'Academic Dashboard', students:'Students', instructors:'Instructors', courses:'Courses', attendance:'Attendance', assignments:'Assignments', quizzes:'Quizzes', quality:'Quality Assurance', meetings:'Meetings', tasks:'My Tasks', reports:'Reports' }
+
+function downloadCSV(filename, data, cols) {
+  const header = cols.map(c => `"${c.label}"`).join(',')
+  const rows = data.map(r => cols.map(c => `"${String(r[c.key] ?? '').replace(/"/g, '""')}"`).join(','))
+  const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
 
 export default function AcademicPortal() {
   const [active, setActive] = useState('dashboard')
@@ -93,12 +104,17 @@ function AcaDash({ onNavigate }) {
 }
 
 function AcaStudents() {
-  const { mockStudents, createStudentWithAuth, updateStudent, deleteStudent } = useData()
-  const [modal, setModal] = useState(false)
-  const [form, setForm]   = useState({name:'',email:'',password:'',phone:'',admissionDate:''})
-  const [err, setErr]     = useState('')
-  const [busy, setBusy]   = useState(false)
-  const add = async ()=>{
+  const { mockStudents, mockCourses, createStudentWithAuth, updateStudent, deleteStudent, enrollStudent, unenrollStudent } = useData()
+  const [modal, setModal]           = useState(false)
+  const [form, setForm]             = useState({name:'',email:'',password:'',phone:'',admissionDate:''})
+  const [err, setErr]               = useState('')
+  const [busy, setBusy]             = useState(false)
+  const [editTarget, setEditTarget] = useState(null)
+  const [editForm, setEditForm]     = useState({name:'',email:'',phone:'',admissionDate:'',gpa:'',attendanceRate:''})
+  const [assignTarget, setAssignTarget] = useState(null)
+  const [assignCourses, setAssignCourses] = useState([])
+
+  const add = async () => {
     if(!form.name||!form.email||!form.password) return setErr('Name, email and password are required.')
     if(form.password.length < 6) return setErr('Password must be at least 6 characters.')
     setBusy(true); setErr('')
@@ -112,11 +128,47 @@ function AcaStudents() {
       setBusy(false)
     }
   }
-  const del = async id=>{ if(window.confirm('Delete this student?')) await deleteStudent(id) }
-  const toggle = async (id, current)=>{ await updateStudent(id, { status: current==='active'?'inactive':'active' }) }
+
+  const del = async id => { if(window.confirm('Delete this student?')) await deleteStudent(id) }
+  const toggle = async (id, current) => { await updateStudent(id, { status: current==='active'?'inactive':'active' }) }
+
+  const openEdit = s => {
+    setEditForm({ name:s.name, email:s.email, phone:s.phone, admissionDate:s.admissionDate, gpa:String(s.gpa), attendanceRate:String(s.attendanceRate) })
+    setEditTarget(s)
+  }
+  const saveEdit = async () => {
+    if(!editForm.name) return
+    await updateStudent(editTarget.id, {
+      name:editForm.name, email:editForm.email, phone:editForm.phone,
+      admissionDate:editForm.admissionDate,
+      gpa:parseFloat(editForm.gpa)||0, attendanceRate:parseInt(editForm.attendanceRate)||0,
+    })
+    setEditTarget(null)
+  }
+
+  const openAssign = s => { setAssignCourses([...s.courses]); setAssignTarget(s) }
+  const toggleCourse = async courseId => {
+    if(assignCourses.includes(courseId)) {
+      await unenrollStudent(assignTarget.id, courseId)
+      setAssignCourses(p => p.filter(id => id !== courseId))
+    } else {
+      await enrollStudent(assignTarget.id, courseId)
+      setAssignCourses(p => [...p, courseId])
+    }
+  }
+
+  const csvCols = [
+    {key:'name',label:'Name'},{key:'email',label:'Email'},{key:'phone',label:'Phone'},
+    {key:'admissionDate',label:'Admission Date'},{key:'attendanceRate',label:'Attendance %'},
+    {key:'gpa',label:'GPA'},{key:'status',label:'Status'},
+  ]
+
   return (
     <div className="space-y-4 animate-fadeIn">
-      <div className="flex justify-end"><button onClick={()=>{setModal(true);setErr('')}} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Add Student</button></div>
+      <div className="flex justify-end gap-2">
+        <button onClick={()=>downloadCSV('students.csv',mockStudents,csvCols)} className="btn-secondary text-xs flex items-center gap-1.5"><Download className="w-3.5 h-3.5"/>CSV</button>
+        <button onClick={()=>{setModal(true);setErr('')}} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Add Student</button>
+      </div>
       <Card>
         <Table columns={[
           {key:'name',label:'Name',render:v=><span className="font-medium">{v}</span>},
@@ -125,7 +177,9 @@ function AcaStudents() {
           {key:'gpa',label:'GPA'},
           {key:'status',label:'Status',render:v=><StatusBadge status={v}/>},
           {key:'id',label:'',render:(_,row)=>(
-            <div className="flex gap-1.5 justify-end">
+            <div className="flex gap-1.5 justify-end flex-wrap">
+              <button onClick={()=>openEdit(row)} className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium flex items-center gap-1"><Pencil className="w-3 h-3"/>Edit</button>
+              <button onClick={()=>openAssign(row)} className="text-xs px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium flex items-center gap-1"><UserCheck className="w-3 h-3"/>Assign</button>
               <button onClick={()=>toggle(row.id,row.status)} className={`text-xs px-2 py-1 rounded-lg font-medium ${row.status==='active'?'bg-amber-50 text-amber-700 hover:bg-amber-100':'bg-green-50 text-green-700 hover:bg-green-100'}`}>
                 {row.status==='active'?'Deactivate':'Activate'}
               </button>
@@ -134,6 +188,8 @@ function AcaStudents() {
           )}
         ]} data={mockStudents}/>
       </Card>
+
+      {/* Add Modal */}
       <Modal open={modal} onClose={()=>setModal(false)} title="Add Student & Create Login">
         <div className="space-y-4">
           <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-700 font-medium">Student will be able to login with these credentials immediately.</div>
@@ -146,19 +202,58 @@ function AcaStudents() {
           <button onClick={add} disabled={busy} className="btn-primary w-full disabled:opacity-60">{busy?'Creating account…':'Add Student & Create Login'}</button>
         </div>
       </Modal>
+
+      {/* Edit Modal */}
+      <Modal open={!!editTarget} onClose={()=>setEditTarget(null)} title={`Edit: ${editTarget?.name||''}`}>
+        <div className="space-y-4">
+          <div><label className="label">Full Name</label><input className="input" value={editForm.name} onChange={e=>setEditForm({...editForm,name:e.target.value})}/></div>
+          <div><label className="label">Email</label><input type="email" className="input" value={editForm.email} onChange={e=>setEditForm({...editForm,email:e.target.value})}/></div>
+          <div><label className="label">Phone</label><input className="input" value={editForm.phone} onChange={e=>setEditForm({...editForm,phone:e.target.value})}/></div>
+          <div><label className="label">Admission Date</label><input type="date" className="input" value={editForm.admissionDate} onChange={e=>setEditForm({...editForm,admissionDate:e.target.value})}/></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="label">GPA (0–4)</label><input type="number" step="0.1" min="0" max="4" className="input" value={editForm.gpa} onChange={e=>setEditForm({...editForm,gpa:e.target.value})}/></div>
+            <div><label className="label">Attendance %</label><input type="number" min="0" max="100" className="input" value={editForm.attendanceRate} onChange={e=>setEditForm({...editForm,attendanceRate:e.target.value})}/></div>
+          </div>
+          <button onClick={saveEdit} className="btn-primary w-full">Save Changes</button>
+        </div>
+      </Modal>
+
+      {/* Assign Courses & Instructor Modal */}
+      <Modal open={!!assignTarget} onClose={()=>setAssignTarget(null)} title={`Assign Courses — ${assignTarget?.name||''}`} wide>
+        <p className="text-xs text-gray-500 mb-3">Toggle courses on/off. Each course already has an assigned instructor shown below.</p>
+        <div className="space-y-2">
+          {mockCourses.length===0 && <p className="text-sm text-gray-400 text-center py-6">No courses available. Add a course first.</p>}
+          {mockCourses.map(c => {
+            const enrolled = assignCourses.includes(c.id)
+            return (
+              <label key={c.id} className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${enrolled?'border-indigo-200 bg-indigo-50':'border-gray-100 hover:bg-gray-50'}`}>
+                <input type="checkbox" className="accent-indigo-600 w-4 h-4" checked={enrolled} onChange={()=>toggleCourse(c.id)}/>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold">{c.name}</p>
+                  <p className="text-xs text-gray-400">Instructor: <span className="text-gray-600 font-medium">{c.instructor||'—'}</span>{c.nextClass&&` · Next: ${c.nextClass}`}</p>
+                </div>
+                {enrolled && <Badge color="indigo">Enrolled</Badge>}
+              </label>
+            )
+          })}
+        </div>
+        <p className="text-[10px] text-gray-400 mt-3">Changes are saved immediately per toggle.</p>
+      </Modal>
     </div>
   )
 }
 
 function AcaInstructors() {
-  const { mockInstructors, createInstructorWithAuth, updateInstructor } = useData()
-  const [modal, setModal]       = useState(false)
+  const { mockInstructors, createInstructorWithAuth, updateInstructor, deleteInstructor } = useData()
+  const [modal, setModal]           = useState(false)
   const [editTarget, setEditTarget] = useState(null)
-  const [form, setForm]         = useState({name:'',email:'',password:'',phone:'',sub:''})
-  const [editForm, setEditForm] = useState({name:'',email:'',phone:'',sub:''})
-  const [err, setErr]           = useState('')
-  const [busy, setBusy]         = useState(false)
-  const add = async ()=>{
+  const [delTarget, setDelTarget]   = useState(null)
+  const [form, setForm]             = useState({name:'',email:'',password:'',phone:'',sub:''})
+  const [editForm, setEditForm]     = useState({name:'',email:'',phone:'',sub:''})
+  const [err, setErr]               = useState('')
+  const [busy, setBusy]             = useState(false)
+
+  const add = async () => {
     if(!form.name||!form.email||!form.password) return setErr('Name, email and password are required.')
     if(form.password.length < 6) return setErr('Password must be at least 6 characters.')
     setBusy(true); setErr('')
@@ -172,16 +267,27 @@ function AcaInstructors() {
       setBusy(false)
     }
   }
-  const openEdit = ins=>{ setEditForm({name:ins.name,email:ins.email,phone:ins.phone,sub:ins.sub}); setEditTarget(ins) }
-  const saveEdit = async ()=>{
+
+  const openEdit = ins => { setEditForm({name:ins.name,email:ins.email,phone:ins.phone,sub:ins.sub}); setEditTarget(ins) }
+  const saveEdit = async () => {
     if(!editForm.name) return
     await updateInstructor(editTarget.id, editForm)
     setEditTarget(null)
   }
-  const toggle = async (id, current)=>{ await updateInstructor(id, { status: current==='active'?'inactive':'active' }) }
+  const toggle = async (id, current) => { await updateInstructor(id, { status: current==='active'?'inactive':'active' }) }
+  const confirmDel = async () => { await deleteInstructor(delTarget.id); setDelTarget(null) }
+
+  const csvCols = [
+    {key:'name',label:'Name'},{key:'email',label:'Email'},{key:'phone',label:'Phone'},
+    {key:'sub',label:'Role/Specialization'},{key:'students',label:'Students'},{key:'status',label:'Status'},
+  ]
+
   return (
     <div className="space-y-4 animate-fadeIn">
-      <div className="flex justify-end"><button onClick={()=>{setModal(true);setErr('')}} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Add Instructor</button></div>
+      <div className="flex justify-end gap-2">
+        <button onClick={()=>downloadCSV('instructors.csv',mockInstructors,csvCols)} className="btn-secondary text-xs flex items-center gap-1.5"><Download className="w-3.5 h-3.5"/>CSV</button>
+        <button onClick={()=>{setModal(true);setErr('')}} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Add Instructor</button>
+      </div>
       <Card>
         <Table columns={[
           {key:'name',label:'Name',render:v=><span className="font-medium">{v}</span>},
@@ -190,14 +296,17 @@ function AcaInstructors() {
           {key:'status',label:'Status',render:v=><StatusBadge status={v}/>},
           {key:'id',label:'',render:(_,row)=>(
             <div className="flex gap-1.5 justify-end">
-              <button onClick={()=>openEdit(row)} className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">Edit</button>
+              <button onClick={()=>openEdit(row)} className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium flex items-center gap-1"><Pencil className="w-3 h-3"/>Edit</button>
               <button onClick={()=>toggle(row.id,row.status)} className={`text-xs px-2 py-1 rounded-lg font-medium ${row.status==='active'?'bg-amber-50 text-amber-700 hover:bg-amber-100':'bg-green-50 text-green-700 hover:bg-green-100'}`}>
                 {row.status==='active'?'Deactivate':'Activate'}
               </button>
+              <button onClick={()=>setDelTarget(row)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-3.5 h-3.5"/></button>
             </div>
           )}
         ]} data={mockInstructors}/>
       </Card>
+
+      {/* Add Modal */}
       <Modal open={modal} onClose={()=>setModal(false)} title="Add Instructor & Create Login">
         <div className="space-y-4">
           <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-700 font-medium">Instructor will be able to login with these credentials immediately.</div>
@@ -210,6 +319,8 @@ function AcaInstructors() {
           <button onClick={add} disabled={busy} className="btn-primary w-full disabled:opacity-60">{busy?'Creating account…':'Add Instructor & Create Login'}</button>
         </div>
       </Modal>
+
+      {/* Edit Modal */}
       <Modal open={!!editTarget} onClose={()=>setEditTarget(null)} title={`Edit: ${editTarget?.name||''}`}>
         <div className="space-y-4">
           <div><label className="label">Full Name</label><input className="input" value={editForm.name} onChange={e=>setEditForm({...editForm,name:e.target.value})}/></div>
@@ -219,34 +330,64 @@ function AcaInstructors() {
           <button onClick={saveEdit} className="btn-primary w-full">Save Changes</button>
         </div>
       </Modal>
+
+      {/* Delete Confirm */}
+      <Modal open={!!delTarget} onClose={()=>setDelTarget(null)} title="Confirm Delete">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-700">Delete instructor <strong>{delTarget?.name}</strong>? This cannot be undone.</p>
+          <div className="flex gap-3">
+            <button onClick={()=>setDelTarget(null)} className="btn-secondary flex-1">Cancel</button>
+            <button onClick={confirmDel} className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700">Delete</button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
 
 function AcaCourses() {
-  const { mockCourses, mockInstructors, mockStudents, addCourse, updateCourse, deleteCourse } = useData()
-  const [sel, setSel]             = useState(null)
-  const [addModal, setAddModal]   = useState(false)
+  const { mockCourses, mockInstructors, mockStudents, addCourse, updateCourse, deleteCourse, enrollStudent, unenrollStudent } = useData()
+  const [sel, setSel]               = useState(null)
+  const [addModal, setAddModal]     = useState(false)
   const [editTarget, setEditTarget] = useState(null)
-  const [delTarget, setDelTarget] = useState(null)
-  const [form, setForm]           = useState({name:'',instructorId:'',instructor:'',nextClass:''})
-  const [editForm, setEditForm]   = useState({name:'',instructorId:'',instructor:'',nextClass:'',teamsLink:'',classroomLink:''})
-  const add = async ()=>{
+  const [delTarget, setDelTarget]   = useState(null)
+  const [form, setForm]             = useState({name:'',instructorId:'',instructor:'',nextClass:''})
+  const [editForm, setEditForm]     = useState({name:'',instructorId:'',instructor:'',nextClass:'',teamsLink:'',classroomLink:''})
+
+  const add = async () => {
     if(!form.name) return
-    const ins=mockInstructors.find(i=>i.id===parseInt(form.instructorId))
+    const ins = mockInstructors.find(i=>i.id===parseInt(form.instructorId))
     await addCourse({...form,instructorId:parseInt(form.instructorId),instructor:ins?.name||form.instructor,progress:0})
     setAddModal(false); setForm({name:'',instructorId:'',instructor:'',nextClass:''})
   }
-  const openEdit = c=>{ setEditForm({name:c.name,instructorId:String(c.instructorId||''),instructor:c.instructor,nextClass:c.nextClass,teamsLink:c.teamsLink||'',classroomLink:c.classroomLink||''}); setEditTarget(c) }
-  const saveEdit = async ()=>{
-    const ins=mockInstructors.find(i=>i.id===parseInt(editForm.instructorId))
+
+  const openEdit = c => { setEditForm({name:c.name,instructorId:String(c.instructorId||''),instructor:c.instructor,nextClass:c.nextClass,teamsLink:c.teamsLink||'',classroomLink:c.classroomLink||''}); setEditTarget(c) }
+  const saveEdit = async () => {
+    const ins = mockInstructors.find(i=>i.id===parseInt(editForm.instructorId))
     await updateCourse(editTarget.id,{...editForm,instructorId:parseInt(editForm.instructorId)||editTarget.instructorId,instructor:ins?.name||editForm.instructor})
     setEditTarget(null)
   }
-  const confirmDel = async ()=>{ await deleteCourse(delTarget.id); setDelTarget(null) }
+  const confirmDel = async () => { await deleteCourse(delTarget.id); setDelTarget(null) }
+
+  // Enroll/unenroll from course's "View Students" modal
+  const toggleEnroll = async (courseId, studentId, alreadyEnrolled) => {
+    if(alreadyEnrolled) await unenrollStudent(studentId, courseId)
+    else await enrollStudent(studentId, courseId)
+  }
+
+  const csvCols = [
+    {key:'name',label:'Course Name'},{key:'instructor',label:'Instructor'},
+    {key:'progress',label:'Progress %'},{key:'nextClass',label:'Next Class'},
+  ]
+  const csvData = mockCourses.map(c => ({ ...c, enrolledCount: c.enrolledStudents?.length||0 }))
+
   return (
     <div className="space-y-3 animate-fadeIn">
-      <div className="flex justify-end"><button onClick={()=>setAddModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Add Course</button></div>
+      <div className="flex justify-end gap-2">
+        <button onClick={()=>downloadCSV('courses.csv',csvData,[...csvCols,{key:'enrolledCount',label:'Enrolled Students'}])} className="btn-secondary text-xs flex items-center gap-1.5"><Download className="w-3.5 h-3.5"/>CSV</button>
+        <button onClick={()=>setAddModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Add Course</button>
+      </div>
+
       {mockCourses.map(c=>(
         <Card key={c.id}>
           <div className="flex justify-between mb-2">
@@ -258,15 +399,42 @@ function AcaCourses() {
           </div>
           <ProgressBar value={c.progress} color="teal" size="lg"/>
           <div className="flex gap-2 mt-3">
-            <button onClick={()=>setSel(c)} className="btn-secondary text-xs py-1.5 flex-1">View Students</button>
-            <button onClick={()=>openEdit(c)} className="text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">Edit</button>
-            <button onClick={()=>setDelTarget(c)} className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 font-medium">Delete</button>
+            <button onClick={()=>setSel(c)} className="btn-secondary text-xs py-1.5 flex-1">Manage Students</button>
+            <button onClick={()=>openEdit(c)} className="text-xs px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium flex items-center gap-1"><Pencil className="w-3 h-3"/>Edit</button>
+            <button onClick={()=>setDelTarget(c)} className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 font-medium flex items-center gap-1"><Trash2 className="w-3 h-3"/>Delete</button>
           </div>
         </Card>
       ))}
-      <Modal open={!!sel} onClose={()=>setSel(null)} title={`${sel?.name||''} — Enrolled Students (${sel?mockStudents.filter(s=>s.courses?.includes(sel.id)).length:0})`} wide>
-        {sel&&<Table columns={[{key:'name',label:'Student',render:v=><span className="font-medium">{v}</span>},{key:'attendanceRate',label:'Att.',render:v=><span className={v>=80?'text-green-600':v>=60?'text-amber-500':'text-red-500'}>{v}%</span>},{key:'gpa',label:'GPA'},{key:'status',label:'Status',render:v=><StatusBadge status={v}/>}]} data={mockStudents.filter(s=>s.courses?.includes(sel.id))} emptyMsg="No students enrolled yet."/>}
+
+      {/* Manage Students Modal */}
+      <Modal open={!!sel} onClose={()=>setSel(null)} title={`${sel?.name||''} — Students`} wide>
+        {sel && (
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 mb-3">Check students to enroll them in this course. Uncheck to remove.</p>
+            {mockStudents.length===0 && <p className="text-sm text-gray-400 text-center py-6">No students available.</p>}
+            {mockStudents.map(s => {
+              const enrolled = sel.enrolledStudents?.includes(s.id)
+              return (
+                <label key={s.id} className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${enrolled?'border-teal-200 bg-teal-50':'border-gray-100 hover:bg-gray-50'}`}>
+                  <input type="checkbox" className="accent-teal-600 w-4 h-4" checked={!!enrolled}
+                    onChange={async()=>{
+                      await toggleEnroll(sel.id,s.id,enrolled)
+                      setSel(prev=>({...prev,enrolledStudents:enrolled?prev.enrolledStudents.filter(id=>id!==s.id):[...prev.enrolledStudents,s.id]}))
+                    }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold">{s.name}</p>
+                    <p className="text-xs text-gray-400">{s.email} · GPA: {s.gpa} · Att: {s.attendanceRate}%</p>
+                  </div>
+                  <StatusBadge status={s.status}/>
+                </label>
+              )
+            })}
+          </div>
+        )}
       </Modal>
+
+      {/* Add Modal */}
       <Modal open={addModal} onClose={()=>setAddModal(false)} title="Add Course">
         <div className="space-y-4">
           <div><label className="label">Course Name</label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
@@ -275,6 +443,8 @@ function AcaCourses() {
           <button onClick={add} className="btn-primary w-full">Add Course</button>
         </div>
       </Modal>
+
+      {/* Edit Modal */}
       <Modal open={!!editTarget} onClose={()=>setEditTarget(null)} title={`Edit: ${editTarget?.name||''}`}>
         <div className="space-y-4">
           <div><label className="label">Course Name</label><input className="input" value={editForm.name} onChange={e=>setEditForm({...editForm,name:e.target.value})}/></div>
@@ -285,6 +455,8 @@ function AcaCourses() {
           <button onClick={saveEdit} className="btn-primary w-full">Save Changes</button>
         </div>
       </Modal>
+
+      {/* Delete Confirm */}
       <Modal open={!!delTarget} onClose={()=>setDelTarget(null)} title="Confirm Delete">
         <div className="space-y-4">
           <p className="text-sm text-gray-700">Delete <strong>{delTarget?.name}</strong>? This action cannot be undone.</p>

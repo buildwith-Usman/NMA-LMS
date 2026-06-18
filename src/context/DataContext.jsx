@@ -329,6 +329,27 @@ export function DataProvider({ children }) {
     if (!error) setMockCourses(p => p.filter(c => c.id !== id))
   }
 
+  async function deleteInstructor(id) {
+    const { error } = await supabase.from('instructors').delete().eq('id', id)
+    if (!error) setMockInstructors(p => p.filter(i => i.id !== id))
+  }
+
+  async function enrollStudent(studentId, courseId) {
+    const { error } = await supabase.from('enrollments').insert({ student_id: studentId, course_id: courseId })
+    if (!error) {
+      setMockStudents(p => p.map(s => s.id === studentId ? { ...s, courses: [...s.courses, courseId] } : s))
+      setMockCourses(p => p.map(c => c.id === courseId ? { ...c, enrolledStudents: [...c.enrolledStudents, studentId] } : c))
+    }
+  }
+
+  async function unenrollStudent(studentId, courseId) {
+    const { error } = await supabase.from('enrollments').delete().eq('student_id', studentId).eq('course_id', courseId)
+    if (!error) {
+      setMockStudents(p => p.map(s => s.id === studentId ? { ...s, courses: s.courses.filter(id => id !== courseId) } : s))
+      setMockCourses(p => p.map(c => c.id === courseId ? { ...c, enrolledStudents: c.enrolledStudents.filter(id => id !== studentId) } : c))
+    }
+  }
+
   async function addAssignment(a) {
     const { data, error } = await supabase.from('assignments').insert({
       course_id: a.courseId, title: a.title, description: a.description || '',
@@ -564,8 +585,9 @@ export function DataProvider({ children }) {
       mockReports, mockMessages, mockAdmissions, mockAttendance,
       attendanceChart, getStats, dataLoading,
       addStudent, updateStudent, deleteStudent, createStudentWithAuth,
-      addInstructor, updateInstructor, createInstructorWithAuth,
+      addInstructor, updateInstructor, deleteInstructor, createInstructorWithAuth,
       addCourse, updateCourse, deleteCourse,
+      enrollStudent, unenrollStudent,
       addAssignment, submitAssignment, gradeAssignment,
       addQuiz, submitQuiz, overrideQuizGrade,
       addComplaint, updateComplaint,
