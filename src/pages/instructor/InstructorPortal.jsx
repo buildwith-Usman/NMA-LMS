@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Sidebar from '../../components/layout/Sidebar'
 import Header from '../../components/layout/Header'
 import { StatCard, StatusBadge, Badge, Table, SectionHeader, Modal, ProgressBar, MiniStat, SelectFilter, Card, FileUploadBox } from '../../components/ui'
-import { mockStudents, mockCourses, mockComplaints, mockMeetings, mockAssignments, mockQuizzes, mockAttendance, mockReports, addComplaint, addMeeting, addReport, addAssignment, gradeAssignment, addQuiz, overrideQuizGrade, markAttendance, submitQuiz } from '../../utils/mockData'
 import { useAuth } from '../../context/AuthContext'
+import { useData } from '../../context/DataContext'
 import { GraduationCap, BookOpen, ClipboardList, AlertCircle, Send, Plus, ExternalLink, Youtube, Video, FileText, CheckSquare, Timer, BarChart3, Calendar } from 'lucide-react'
 
 const PAGES = { dashboard:'Instructor Dashboard', courses:'My Courses', students:'My Students', attendance:'Mark Attendance', assignments:'Assignments', quizzes:'Quizzes', liveclass:'Live Class', complaints:'Complaints', meetings:'Meetings', reports:'Reports' }
@@ -32,18 +32,19 @@ export default function InstructorPortal() {
   )
 }
 
-// Get this instructor's courses (demo: Essam = instructorId 13)
-const MY_INSTRUCTOR_ID = 13
-const myCourses = () => mockCourses.filter(c => c.instructorId === MY_INSTRUCTOR_ID)
-const myStudents = () => {
-  const enrolled = new Set(myCourses().flatMap(c => c.enrolledStudents || []))
-  return mockStudents.filter(s => enrolled.has(s.id))
+function useInstructor() {
+  const { user } = useAuth()
+  const { mockInstructors } = useData()
+  return mockInstructors.find(i => i.authId === user?.id) || null
 }
 
 function InsDash({ onNavigate }) {
   const { user } = useAuth()
-  const courses  = myCourses()
-  const students = myStudents()
+  const { mockCourses, mockStudents, mockAssignments, mockQuizzes } = useData()
+  const instructor = useInstructor()
+  const courses  = mockCourses.filter(c => c.instructorId === instructor?.id)
+  const enrolled = new Set(courses.flatMap(c => c.enrolledStudents || []))
+  const students = mockStudents.filter(s => enrolled.has(s.id))
   const pendingGrading = mockAssignments.filter(a=>courses.some(c=>c.id===a.courseId)).reduce((acc,a)=>acc+a.submissions.filter(s=>s.status==='submitted').length, 0)
   const totalQuizSubs  = mockQuizzes.filter(q=>courses.some(c=>c.id===q.courseId)).reduce((acc,q)=>acc+q.submissions.length, 0)
   const [drill, setDrill] = useState(null)
@@ -55,14 +56,12 @@ function InsDash({ onNavigate }) {
         <h2 className="font-bold text-2xl mt-0.5">{user?.name} 📚</h2>
         <p className="text-white/50 text-sm mt-1">Manage courses, students, and assessments · Click cards for details</p>
       </div>
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="My Courses"     value={courses.length}   icon={BookOpen}      color="blue"   onClick={()=>setDrill('courses')}    clickLabel="View courses"/>
-        <StatCard label="My Students"    value={students.length}  icon={GraduationCap} color="purple" onClick={()=>setDrill('students')}   clickLabel="View students"/>
-        <StatCard label="Pending Grading"value={pendingGrading}   icon={FileText}      color="amber"  onClick={()=>setDrill('grading')}    clickLabel="View submissions"/>
-        <StatCard label="Quiz Submissions"value={totalQuizSubs}   icon={CheckSquare}   color="teal"   onClick={()=>setDrill('quiz_subs')}  clickLabel="View quiz results"/>
+        <StatCard label="My Courses"      value={courses.length}   icon={BookOpen}      color="blue"   onClick={()=>setDrill('courses')}    clickLabel="View courses"/>
+        <StatCard label="My Students"     value={students.length}  icon={GraduationCap} color="purple" onClick={()=>setDrill('students')}   clickLabel="View students"/>
+        <StatCard label="Pending Grading" value={pendingGrading}   icon={FileText}      color="amber"  onClick={()=>setDrill('grading')}    clickLabel="View submissions"/>
+        <StatCard label="Quiz Submissions"value={totalQuizSubs}    icon={CheckSquare}   color="teal"   onClick={()=>setDrill('quiz_subs')}  clickLabel="View quiz results"/>
       </div>
-
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
           <SectionHeader title="My Courses" action={<button onClick={()=>onNavigate('courses')} className="text-xs text-blue-600 hover:underline">View all →</button>}/>
@@ -85,8 +84,6 @@ function InsDash({ onNavigate }) {
           {mockAssignments.filter(a=>courses.some(c=>c.id===a.courseId)).flatMap(a=>a.submissions.filter(s=>s.status==='submitted')).length===0 && <p className="text-xs text-gray-400 text-center py-4">All caught up! ✓</p>}
         </Card>
       </div>
-
-      {/* Drill-down modals */}
       <Modal open={drill==='courses'} onClose={()=>setDrill(null)} title="My Courses" wide>
         {courses.map(c=>(
           <div key={c.id} className="mb-3 p-3 border border-indigo-100 rounded-xl">
@@ -127,11 +124,13 @@ function InsDash({ onNavigate }) {
 }
 
 function InsCourses() {
-  const [sel, setSel] = useState(null)
+  const { mockCourses, mockStudents } = useData()
+  const instructor = useInstructor()
+  const courses = mockCourses.filter(c => c.instructorId === instructor?.id)
+  const [sel, setSel]       = useState(null)
   const [ytModal, setYtModal] = useState(null)
   const [matModal, setMatModal] = useState(null)
   const [ytForm, setYtForm] = useState({title:'',url:''})
-  const courses = myCourses()
   return (
     <div className="space-y-3 animate-fadeIn">
       {courses.map(c=>(
@@ -183,11 +182,14 @@ function InsCourses() {
 }
 
 function InsStudents() {
+  const { mockCourses, mockStudents } = useData()
+  const instructor = useInstructor()
+  const courses = mockCourses.filter(c => c.instructorId === instructor?.id)
+  const enrolled = new Set(courses.flatMap(c => c.enrolledStudents || []))
   const [cid, setCid] = useState('')
-  const courses = myCourses()
   const students = cid
     ? mockStudents.filter(s=>s.courses?.includes(parseInt(cid)))
-    : myStudents()
+    : mockStudents.filter(s => enrolled.has(s.id))
   return (
     <div className="space-y-4 animate-fadeIn">
       <Card>
@@ -202,16 +204,18 @@ function InsStudents() {
 
 function InsAttendance() {
   const { pushNotif } = useAuth()
-  const courses = myCourses()
-  const [cid,  setCid]     = useState(String(courses[0]?.id||1))
-  const [date, setDate]    = useState(new Date().toISOString().split('T')[0])
-  const [marks, setMarks]  = useState({})
-  const [saved, setSaved]  = useState(false)
+  const { mockCourses, mockStudents, markAttendance } = useData()
+  const instructor = useInstructor()
+  const courses = mockCourses.filter(c => c.instructorId === instructor?.id)
+  const [cid,  setCid]    = useState(String(courses[0]?.id||''))
+  const [date, setDate]   = useState(new Date().toISOString().split('T')[0])
+  const [marks, setMarks] = useState({})
+  const [saved, setSaved] = useState(false)
   const enrolled = mockStudents.filter(s=>s.courses?.includes(parseInt(cid)))
   const toggle = (id, status) => setMarks(m=>({...m,[id]:status}))
-  const save = ()=>{
+  const save = async () => {
     const records = enrolled.map(s=>({studentId:s.id,studentName:s.name,courseId:parseInt(cid),date,status:marks[s.id]||'absent'}))
-    markAttendance(records)
+    await markAttendance(records)
     setSaved(true); setTimeout(()=>setSaved(false),2500)
   }
   return (
@@ -250,23 +254,23 @@ function InsAttendance() {
 
 function InsAssignments() {
   const { pushNotif } = useAuth()
-  const courses = myCourses()
+  const { mockCourses, mockAssignments, addAssignment, gradeAssignment } = useData()
+  const instructor = useInstructor()
+  const courses = mockCourses.filter(c => c.instructorId === instructor?.id)
+  const asgList = mockAssignments.filter(a=>courses.some(c=>c.id===a.courseId))
   const [modal, setModal]   = useState(false)
   const [gradeM, setGradeM] = useState(null)
-  const [asgList, setAsgList] = useState(mockAssignments.filter(a=>courses.some(c=>c.id===a.courseId)))
-  const [form, setForm]     = useState({courseId:String(courses[0]?.id||1),title:'',description:'',dueDate:''})
-  const [gradeF,setGradeF]  = useState({grade:'',feedback:''})
+  const [form, setForm]     = useState({courseId:String(courses[0]?.id||''),title:'',description:'',dueDate:''})
+  const [gradeF, setGradeF] = useState({grade:'',feedback:''})
 
-  const create = ()=>{
-    addAssignment({...form,courseId:parseInt(form.courseId),maxGrade:100,status:'active'})
-    pushNotif('student',`New assignment: "${form.title}"`, 'assignment')
-    setAsgList(mockAssignments.filter(a=>courses.some(c=>c.id===a.courseId)))
-    setModal(false); setForm({courseId:String(courses[0]?.id||1),title:'',description:'',dueDate:''})
+  const create = async () => {
+    await addAssignment({...form,courseId:parseInt(form.courseId),maxGrade:100,status:'active'})
+    await pushNotif('student', `New assignment: "${form.title}"`, 'assignment')
+    setModal(false); setForm({courseId:String(courses[0]?.id||''),title:'',description:'',dueDate:''})
   }
-  const grade = ()=>{
-    gradeAssignment(gradeM.asgId, gradeM.studentId, parseInt(gradeF.grade), gradeF.feedback)
-    pushNotif('student',`Assignment "${gradeM.title}" graded — ${gradeF.grade}/100`, 'grade')
-    setAsgList(mockAssignments.filter(a=>courses.some(c=>c.id===a.courseId)))
+  const grade = async () => {
+    await gradeAssignment(gradeM.asgId, gradeM.studentId, parseInt(gradeF.grade), gradeF.feedback)
+    await pushNotif('student', `Assignment "${gradeM.title}" graded — ${gradeF.grade}/100`, 'grade')
     setGradeM(null); setGradeF({grade:'',feedback:''})
   }
   return (
@@ -314,25 +318,25 @@ function InsAssignments() {
 
 function InsQuizzes() {
   const { pushNotif } = useAuth()
-  const courses = myCourses()
-  const [createM, setCreateM] = useState(false)
+  const { mockCourses, mockQuizzes, addQuiz, overrideQuizGrade } = useData()
+  const instructor = useInstructor()
+  const courses  = mockCourses.filter(c => c.instructorId === instructor?.id)
+  const quizList = mockQuizzes.filter(q=>courses.some(c=>c.id===q.courseId))
+  const [createM, setCreateM]   = useState(false)
   const [overrideM, setOverrideM] = useState(null)
-  const [quizList, setQuizList] = useState(mockQuizzes.filter(q=>courses.some(c=>c.id===q.courseId)))
-  const [form, setForm] = useState({courseId:String(courses[0]?.id||1),title:'',duration:15,dueDate:'',questions:[{text:'',options:['','','',''],correct:0}]})
-  const [ovF, setOvF] = useState({grade:'',feedback:''})
+  const [form, setForm] = useState({courseId:String(courses[0]?.id||''),title:'',duration:15,dueDate:'',questions:[{text:'',options:['','','',''],correct:0}]})
+  const [ovF, setOvF]   = useState({grade:'',feedback:''})
   const addQ = ()=>setForm({...form,questions:[...form.questions,{text:'',options:['','','',''],correct:0}]})
   const updQ = (i,f,v)=>{const qs=[...form.questions];qs[i]={...qs[i],[f]:v};setForm({...form,questions:qs})}
   const updO = (qi,oi,v)=>{const qs=[...form.questions];qs[qi].options[oi]=v;setForm({...form,questions:qs})}
-  const create = ()=>{
-    addQuiz({...form,courseId:parseInt(form.courseId),status:'active'})
-    pushNotif('student',`New quiz: "${form.title}" — due ${form.dueDate}`, 'quiz')
-    setQuizList(mockQuizzes.filter(q=>courses.some(c=>c.id===q.courseId)))
+  const create = async () => {
+    await addQuiz({...form,courseId:parseInt(form.courseId),status:'active'})
+    await pushNotif('student', `New quiz: "${form.title}" — due ${form.dueDate}`, 'quiz')
     setCreateM(false)
   }
-  const override = ()=>{
-    overrideQuizGrade(overrideM.qzId,overrideM.studentId,parseInt(ovF.grade),ovF.feedback)
-    pushNotif('student','Quiz grade updated by instructor', 'grade')
-    setQuizList(mockQuizzes.filter(q=>courses.some(c=>c.id===q.courseId)))
+  const override = async () => {
+    await overrideQuizGrade(overrideM.qzId, overrideM.studentId, parseInt(ovF.grade), ovF.feedback)
+    await pushNotif('student', 'Quiz grade updated by instructor', 'grade')
     setOverrideM(null); setOvF({grade:'',feedback:''})
   }
   return (
@@ -400,7 +404,9 @@ function InsQuizzes() {
 }
 
 function InsLiveClass() {
-  const courses = myCourses()
+  const { mockCourses } = useData()
+  const instructor = useInstructor()
+  const courses = mockCourses.filter(c => c.instructorId === instructor?.id)
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-800">
@@ -428,12 +434,14 @@ function InsLiveClass() {
 
 function InsComplaints() {
   const { user, pushNotif } = useAuth()
+  const { mockComplaints, addComplaint } = useData()
+  const instructor = useInstructor()
   const [modal, setModal] = useState(false)
   const [form, setForm]   = useState({subject:'',desc:'',assignedTo:'Student Affairs Assistant',priority:'medium'})
   const mine = mockComplaints.filter(c=>c.fromRole==='instructor')
-  const submit = ()=>{
-    addComplaint({fromId:13,from:user?.name||'Essam',fromRole:'instructor',subject:form.subject,desc:form.desc,assignedTo:form.assignedTo,priority:form.priority,status:'pending',date:new Date().toISOString().split('T')[0]})
-    pushNotif('affairs',`New instructor complaint: "${form.subject}"`, 'complaint')
+  const submit = async () => {
+    await addComplaint({fromId:instructor?.id,from:user?.name,fromRole:'instructor',subject:form.subject,desc:form.desc,assignedTo:form.assignedTo,priority:form.priority,status:'pending'})
+    await pushNotif('affairs', `New instructor complaint: "${form.subject}"`, 'complaint')
     setModal(false); setForm({subject:'',desc:'',assignedTo:'Student Affairs Assistant',priority:'medium'})
   }
   return (
@@ -458,19 +466,18 @@ function InsComplaints() {
 
 function InsMeetings() {
   const { user, pushNotif } = useAuth()
-  const [modal, setModal]   = useState(false)
-  const [meetings, setMeets] = useState(mockMeetings)
-  const [form, setForm]      = useState({title:'',date:'',link:'',platform:'teams',invitees:[]})
-  // Instructors can create live class meetings with students, or join meetings from Foundation Lead/Affairs
-  const myMeetings = meetings.filter(m=>m.participantRoles?.includes('instructor')||m.createdByRole==='instructor')
-  const ALLOWED    = [{name:'All My Students',role:'student'}]
+  const { mockMeetings, mockStudents, addMeeting } = useData()
+  const instructor = useInstructor()
+  const myMeetings = mockMeetings.filter(m=>m.participantRoles?.includes('instructor')||m.createdByRole==='instructor')
+  const [modal, setModal] = useState(false)
+  const [form, setForm]   = useState({title:'',date:'',link:'',platform:'teams',invitees:[]})
+  const ALLOWED = [{name:'All My Students',role:'student'}]
   const toggle = (name,role)=>{const e=form.invitees.find(i=>i.name===name);setForm({...form,invitees:e?form.invitees.filter(i=>i.name!==name):[...form.invitees,{name,role}]})}
-  const create = ()=>{
+  const create = async () => {
     if(!form.title||!form.date) return
-    addMeeting({...form,createdBy:user?.name||'Essam',createdByRole:'instructor',participants:[user?.name||'Essam',...form.invitees.map(i=>i.name)],participantRoles:['instructor',...form.invitees.map(i=>i.role)],status:'upcoming'})
-    form.invitees.forEach(i=>pushNotif(i.role,`Live class scheduled by ${user?.name}: "${form.title}"`, 'meeting'))
-    setMeets([...mockMeetings]); setModal(false)
-    setForm({title:'',date:'',link:'',platform:'teams',invitees:[]})
+    await addMeeting({...form,createdBy:user?.name,createdByRole:'instructor',participants:[user?.name,...form.invitees.map(i=>i.name)],participantRoles:['instructor',...form.invitees.map(i=>i.role)],status:'upcoming'})
+    for (const inv of form.invitees) await pushNotif(inv.role, `Live class scheduled by ${user?.name}: "${form.title}"`, 'meeting')
+    setModal(false); setForm({title:'',date:'',link:'',platform:'teams',invitees:[]})
   }
   return (
     <div className="space-y-3 animate-fadeIn">
@@ -509,13 +516,14 @@ function InsMeetings() {
 
 function InsReports() {
   const { user, pushNotif } = useAuth()
-  const [form,  setForm]  = useState({to:'affairs',type:'Student Progress',period:'July 2024',content:''})
-  const [file,  setFile]  = useState(null)
-  const [sent,  setSent]  = useState(false)
-  const send = ()=>{
+  const { mockReports, addReport } = useData()
+  const [form, setForm] = useState({to:'affairs',type:'Student Progress',period:'',content:''})
+  const [file, setFile] = useState(null)
+  const [sent, setSent] = useState(false)
+  const send = async () => {
     if(!form.content.trim()) return
-    addReport({from:user?.name||'Essam',fromRole:'instructor',to:form.to==='affairs'?'Student Affairs Assistant':'Foundation Lead',type:form.type,period:form.period,content:form.content+(file?` [Attachment: ${file.name}]`:''),fileName:file?.name||null})
-    pushNotif(form.to,`Report from ${user?.name}: "${form.type}"`, 'report')
+    await addReport({from:user?.name,fromRole:'instructor',to:form.to==='affairs'?'Student Affairs Assistant':'Foundation Lead',type:form.type,period:form.period,content:form.content+(file?` [Attachment: ${file.name}]`:''),fileName:file?.name||null})
+    await pushNotif(form.to, `Report from ${user?.name}: "${form.type}"`, 'report')
     setSent(true); setTimeout(()=>setSent(false),2500)
   }
   const mine = mockReports.filter(r=>r.fromRole==='instructor')
@@ -526,7 +534,7 @@ function InsReports() {
         <div className="space-y-3">
           <div><label className="label">Send To</label><select className="input" value={form.to} onChange={e=>setForm({...form,to:e.target.value})}><option value="affairs">Student Affairs Assistant</option><option value="foundation_lead">Foundation Lead</option></select></div>
           <div><label className="label">Report Type</label><select className="input" value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option>Student Progress</option><option>Attendance Summary</option><option>Grade Report</option><option>At-Risk Students</option><option>Complaint Report</option></select></div>
-          <div><label className="label">Period</label><select className="input" value={form.period} onChange={e=>setForm({...form,period:e.target.value})}><option>July 2024</option><option>June 2024</option><option>Q3 2024</option></select></div>
+          <div><label className="label">Period</label><input className="input" value={form.period} onChange={e=>setForm({...form,period:e.target.value})} placeholder="e.g. July 2024"/></div>
           <div><label className="label">Content</label><textarea className="input" rows={4} value={form.content} onChange={e=>setForm({...form,content:e.target.value})} placeholder="Student performance summary…"/></div>
           <FileUploadBox onFile={setFile} label="Attach File (optional)" hint="Upload PDF, DOCX, or Excel report"/>
           {sent?<div className="p-2.5 bg-green-50 text-green-700 rounded-xl text-xs text-center font-medium">✓ Report sent!</div>:<button onClick={send} className="btn-primary w-full"><Send className="w-3.5 h-3.5"/>Send Report</button>}

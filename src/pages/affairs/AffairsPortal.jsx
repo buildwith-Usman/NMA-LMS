@@ -2,8 +2,8 @@ import { useState } from 'react'
 import Sidebar from '../../components/layout/Sidebar'
 import Header from '../../components/layout/Header'
 import { StatCard, StatusBadge, Badge, Table, SectionHeader, Modal, MiniStat, Card, FileUploadBox } from '../../components/ui'
-import { getStats, mockStudents, mockComplaints, mockSurveys, mockMeetings, mockTasks, mockReports, addComplaint, addSurvey, addMeeting, addReport, updateComplaint, updateTask, submitSurveyResponse } from '../../utils/mockData'
 import { useAuth } from '../../context/AuthContext'
+import { useData } from '../../context/DataContext'
 import { AlertCircle, ClipboardList, Calendar, Send, Plus, ExternalLink, CheckSquare, BarChart3, GraduationCap } from 'lucide-react'
 
 const PAGES = { dashboard:'Affairs Dashboard', students:'Students', complaints:'Complaints', surveys:'Create Surveys', meetings:'Meetings', tasks:'My Tasks', reports:'Reports' }
@@ -30,8 +30,9 @@ export default function AffairsPortal() {
 }
 
 function AffDash({ onNavigate }) {
-  const stats = getStats()
   const { user } = useAuth()
+  const { getStats, mockTasks, mockComplaints, mockSurveys, mockStudents } = useData()
+  const stats = getStats()
   const [drill, setDrill] = useState(null)
   const myTasks = mockTasks.filter(t=>t.assignedToRole==='affairs')
   return (
@@ -42,12 +43,11 @@ function AffDash({ onNavigate }) {
         <p className="text-white/50 text-sm mt-1">Manage complaints, surveys, and student welfare · Click stats for details</p>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Total Students"    value={stats.totalStudents}  icon={GraduationCap} color="blue"   onClick={()=>setDrill('students')}    clickLabel="View students"/>
-        <StatCard label="Pending Complaints"value={stats.pendingComplaints} icon={AlertCircle} color="amber" onClick={()=>setDrill('complaints')}  clickLabel="View complaints"/>
-        <StatCard label="Active Surveys"    value={stats.activeSurveys}  icon={ClipboardList} color="teal"  onClick={()=>setDrill('surveys')}     clickLabel="View surveys"/>
+        <StatCard label="Total Students"    value={stats.totalStudents}          icon={GraduationCap} color="blue"   onClick={()=>setDrill('students')}   clickLabel="View students"/>
+        <StatCard label="Pending Complaints"value={stats.pendingComplaints}      icon={AlertCircle}   color="amber"  onClick={()=>setDrill('complaints')} clickLabel="View complaints"/>
+        <StatCard label="Active Surveys"    value={stats.activeSurveys}          icon={ClipboardList} color="teal"   onClick={()=>setDrill('surveys')}    clickLabel="View surveys"/>
         <StatCard label="My Tasks"          value={myTasks.filter(t=>t.status!=='completed').length} icon={CheckSquare} color="orange" onClick={()=>onNavigate('tasks')} clickLabel="View tasks"/>
       </div>
-      {/* Drills */}
       <Modal open={drill==='students'} onClose={()=>setDrill(null)} title="All Students" wide>
         <Table columns={[{key:'name',label:'Name',render:v=><span className="font-medium">{v}</span>},{key:'attendanceRate',label:'Att.',render:v=><span className={v>=80?'text-green-600':v>=60?'text-amber-500':'text-red-500'}>{v}%</span>},{key:'gpa',label:'GPA'},{key:'status',label:'Status',render:v=><StatusBadge status={v}/>}]} data={mockStudents}/>
       </Modal>
@@ -73,6 +73,7 @@ function AffDash({ onNavigate }) {
 }
 
 function AffStudents() {
+  const { mockStudents } = useData()
   return (
     <Card className="animate-fadeIn">
       <SectionHeader title="All Students"/>
@@ -83,13 +84,14 @@ function AffStudents() {
 
 function AffComplaints() {
   const { user, pushNotif } = useAuth()
+  const { mockComplaints, updateComplaint } = useData()
   const [priority, setPriority] = useState('')
   const [modal, setModal]   = useState(null)
   const [note, setNote]     = useState('')
   const filtered = mockComplaints.filter(c=>priority===''||c.priority===priority)
-  const update = (id,st)=>{
-    updateComplaint(id,st,note,user?.name||'Affairs')
-    pushNotif('foundation_lead',`Complaint updated to: ${st}`, 'complaint')
+  const update = async (id,st)=>{
+    await updateComplaint(id,st,note,user?.name||'Affairs')
+    await pushNotif('foundation_lead',`Complaint updated to: ${st}`, 'complaint')
     setModal(null); setNote('')
   }
   return (
@@ -132,20 +134,20 @@ function AffComplaints() {
 }
 
 function AffSurveys() {
-  const { pushNotif } = useAuth()
-  const [modal, setModal]   = useState(false)
-  const [surveys, setSurveys] = useState(mockSurveys)
-  const [form, setForm]     = useState({title:'',deadline:'',questions:['','']})
-  const create = ()=>{
+  const { user, pushNotif } = useAuth()
+  const { mockSurveys, mockStudents, addSurvey } = useData()
+  const [modal, setModal] = useState(false)
+  const [form, setForm]   = useState({title:'',deadline:'',questions:['','']})
+  const create = async ()=>{
     const qs=form.questions.filter(q=>q.trim()).map((q,i)=>({id:i+1,text:q}))
-    addSurvey({title:form.title,createdBy:'Abdullmhun',deadline:form.deadline,status:'active',sentTo:'students',questions:qs,sent:mockStudents.length})
-    pushNotif('student',`New survey: "${form.title}"`, 'survey')
-    setSurveys([...mockSurveys]); setModal(false)
+    await addSurvey({title:form.title,createdBy:user?.name,deadline:form.deadline,status:'active',sentTo:'students',questions:qs,sent:mockStudents.length})
+    await pushNotif('student',`New survey: "${form.title}"`, 'survey')
+    setModal(false); setForm({title:'',deadline:'',questions:['','']})
   }
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Create Survey</button></div>
-      {surveys.map(s=>(
+      {mockSurveys.map(s=>(
         <Card key={s.id}>
           <div className="flex justify-between mb-2"><div><p className="font-semibold">{s.title}</p><p className="text-xs text-gray-400">By {s.createdBy} · Due: {s.deadline}</p></div><StatusBadge status={s.status}/></div>
           <p className="text-xs text-gray-400 mb-2">{s.responses.length}/{s.sent} responses</p>
@@ -172,18 +174,18 @@ function AffSurveys() {
 
 function AffMeetings() {
   const { user, pushNotif } = useAuth()
-  const [meetings, setMeets] = useState(mockMeetings)
-  const [modal, setModal]    = useState(false)
-  const [form, setForm]      = useState({title:'',date:'',link:'',platform:'teams',invitees:[]})
+  const { mockMeetings, addMeeting } = useData()
+  const [modal, setModal] = useState(false)
+  const [form, setForm]   = useState({title:'',date:'',link:'',platform:'teams',invitees:[]})
   const ALLOWED = [{name:'Mohammad Abdullah (Foundation Lead)',role:'foundation_lead'},{name:'Essam',role:'instructor'},{name:'Mohammed Khery',role:'instructor'},{name:'Mohammed Soliman',role:'instructor'}]
   const toggle = (name,role)=>{const e=form.invitees.find(i=>i.name===name);setForm({...form,invitees:e?form.invitees.filter(i=>i.name!==name):[...form.invitees,{name,role}]})}
-  const create = ()=>{
+  const create = async ()=>{
     if(!form.title||!form.date) return
-    addMeeting({...form,createdBy:user?.name,createdByRole:'affairs',participants:[user?.name,...form.invitees.map(i=>i.name)],participantRoles:['affairs',...form.invitees.map(i=>i.role)],status:'upcoming'})
-    form.invitees.forEach(i=>pushNotif(i.role,`Meeting from ${user?.name}: "${form.title}"`, 'meeting'))
-    setMeets([...mockMeetings]); setModal(false)
+    await addMeeting({...form,createdBy:user?.name,createdByRole:'affairs',participants:[user?.name,...form.invitees.map(i=>i.name)],participantRoles:['affairs',...form.invitees.map(i=>i.role)],status:'upcoming'})
+    for (const i of form.invitees) await pushNotif(i.role,`Meeting from ${user?.name}: "${form.title}"`, 'meeting')
+    setModal(false); setForm({title:'',date:'',link:'',platform:'teams',invitees:[]})
   }
-  const myMeetings = meetings.filter(m=>m.participantRoles?.includes('affairs')||m.createdByRole==='affairs')
+  const myMeetings = mockMeetings.filter(m=>m.participantRoles?.includes('affairs')||m.createdByRole==='affairs')
   return (
     <div className="space-y-3 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Schedule Meeting</button></div>
@@ -218,9 +220,9 @@ function AffMeetings() {
 }
 
 function AffTasks() {
-  const [tasks, setTasks] = useState(mockTasks)
-  const update = (id,status)=>{ updateTask(id,status); setTasks([...mockTasks]) }
-  const myTasks = tasks.filter(t=>t.assignedToRole==='affairs')
+  const { mockTasks, updateTask } = useData()
+  const myTasks = mockTasks.filter(t=>t.assignedToRole==='affairs')
+  const update = async (id,status)=>{ await updateTask(id,status) }
   return (
     <div className="space-y-3 animate-fadeIn">
       {myTasks.length===0&&<Card className="text-center py-8 text-gray-400 text-sm">No tasks assigned yet</Card>}
@@ -245,13 +247,14 @@ function AffTasks() {
 
 function AffReports() {
   const { user, pushNotif } = useAuth()
-  const [form, setForm] = useState({to:'foundation_lead',type:'Complaint Report',period:'July 2024',content:''})
+  const { mockReports, addReport } = useData()
+  const [form, setForm] = useState({to:'foundation_lead',type:'Complaint Report',period:'',content:''})
   const [file, setFile] = useState(null)
   const [sent, setSent] = useState(false)
-  const send = ()=>{
+  const send = async ()=>{
     if(!form.content.trim()) return
-    addReport({from:user?.name,fromRole:'affairs',to:form.to==='foundation_lead'?'Foundation Lead':'Principal',type:form.type,period:form.period,content:form.content+(file?` [File: ${file.name}]`:''),fileName:file?.name||null})
-    pushNotif(form.to,`Report from ${user?.name}: "${form.type}"`, 'report')
+    await addReport({from:user?.name,fromRole:'affairs',to:form.to==='foundation_lead'?'Foundation Lead':'Principal',type:form.type,period:form.period,content:form.content+(file?` [File: ${file.name}]`:''),fileName:file?.name||null})
+    await pushNotif(form.to,`Report from ${user?.name}: "${form.type}"`, 'report')
     setSent(true); setTimeout(()=>setSent(false),2500)
   }
   return (
@@ -261,7 +264,7 @@ function AffReports() {
         <div className="space-y-3">
           <div><label className="label">Send To</label><select className="input" value={form.to} onChange={e=>setForm({...form,to:e.target.value})}><option value="foundation_lead">Foundation Lead</option><option value="principal">Principal</option></select></div>
           <div><label className="label">Report Type</label><select className="input" value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option>Complaint Report</option><option>Student Welfare Report</option><option>Survey Results</option><option>Attendance Summary</option></select></div>
-          <div><label className="label">Period</label><select className="input" value={form.period} onChange={e=>setForm({...form,period:e.target.value})}><option>July 2024</option><option>June 2024</option><option>Q3 2024</option></select></div>
+          <div><label className="label">Period</label><input className="input" value={form.period} onChange={e=>setForm({...form,period:e.target.value})} placeholder="e.g. July 2024"/></div>
           <div><label className="label">Content</label><textarea className="input" rows={4} value={form.content} onChange={e=>setForm({...form,content:e.target.value})} placeholder="Report details…"/></div>
           <FileUploadBox onFile={setFile} label="Attach File (optional)" hint="Upload PDF, DOCX, or image"/>
           {sent?<div className="p-2.5 bg-green-50 text-green-700 rounded-xl text-xs text-center font-medium">✓ Report sent!</div>:<button onClick={send} className="btn-primary w-full"><Send className="w-3.5 h-3.5"/>Send Report</button>}

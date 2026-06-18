@@ -2,8 +2,8 @@ import { useState } from 'react'
 import Sidebar from '../../components/layout/Sidebar'
 import Header from '../../components/layout/Header'
 import { StatCard, StatusBadge, Badge, Table, SectionHeader, Modal, MiniStat, FileUploadBox } from '../../components/ui'
-import { mockMessages, mockReports, mockMeetings, mockTasks, sendMessage, addReport, addMeeting, updateTask } from '../../utils/mockData'
 import { useAuth } from '../../context/AuthContext'
+import { useData } from '../../context/DataContext'
 import { MessageSquare, BarChart3, Users, Send, Plus, Calendar, ExternalLink, CheckSquare } from 'lucide-react'
 
 const PAGES = { dashboard:'Training Operations Dashboard', messages:'Messages', academic_team:'Academic Team', meetings:'Meetings', reports:'Reports', tasks:'My Tasks' }
@@ -30,8 +30,9 @@ export default function TrainingOpsPortal() {
 
 function TOMDash({ onNavigate }) {
   const { user } = useAuth()
-  const myTasks = mockTasks.filter(t=>t.assignedToRole==='training_ops')
-  const unreadMsgs = mockMessages.filter(m=>!m.read&&m.toRole==='training_ops')
+  const { mockTasks, mockMessages, mockMeetings, mockReports } = useData()
+  const myTasks   = mockTasks.filter(t=>t.assignedToRole==='training_ops')
+  const unreadMsgs= mockMessages.filter(m=>!m.read&&m.toRole==='training_ops')
   return (
     <div className="space-y-5 animate-fadeIn">
       <div className="rounded-2xl bg-gradient-to-r from-amber-600 to-yellow-700 p-5 text-white">
@@ -77,17 +78,18 @@ function TOMDash({ onNavigate }) {
 
 function TOMMessages() {
   const { user, pushNotif } = useAuth()
+  const { mockMessages, sendMessage } = useData()
   const [form, setForm] = useState({to:'principal',text:''})
   const msgs = mockMessages.filter(m=>m.fromRole==='training_ops'||m.toRole==='training_ops'||m.fromRole==='principal')
   const CONTACTS = [
     {role:'principal',name:'Principal'},
     {role:'academic',name:'Academic Team (Ali/Mohammad/Abdullah/Abdulaziz)'},
   ]
-  const send = () => {
+  const send = async () => {
     if(!form.text.trim()) return
     const c=CONTACTS.find(x=>x.role===form.to)
-    sendMessage({fromRole:'training_ops',from:user?.name,toRole:form.to,to:c?.name,text:form.text})
-    pushNotif(form.to, `Message from ${user?.name}: "${form.text.slice(0,40)}"`, 'message')
+    await sendMessage({fromRole:'training_ops',from:user?.name,toRole:form.to,to:c?.name,text:form.text})
+    await pushNotif(form.to, `Message from ${user?.name}: "${form.text.slice(0,40)}"`, 'message')
     setForm({...form,text:''})
   }
   return (
@@ -123,12 +125,13 @@ function TOMMessages() {
 
 function TOMAcademic() {
   const { user, pushNotif } = useAuth()
+  const { sendMessage } = useData()
   const team = [{id:1,name:'Ali',role:'Academic Assistant'},{id:2,name:'Mohammad (Academic)',role:'Academic Administrator'},{id:3,name:'Abdullah (Academic)',role:'Academic Administrator'},{id:4,name:'Abdulaziz',role:'Quality Coordinator'}]
   const [msg, setMsg] = useState('')
-  const sendToAcademic = () => {
+  const sendToAcademic = async () => {
     if(!msg.trim()) return
-    sendMessage({fromRole:'training_ops',from:user?.name,toRole:'academic',to:'Academic Team',text:msg})
-    pushNotif('academic', `Message from ${user?.name}: "${msg.slice(0,40)}"`, 'message')
+    await sendMessage({fromRole:'training_ops',from:user?.name,toRole:'academic',to:'Academic Team',text:msg})
+    await pushNotif('academic', `Message from ${user?.name}: "${msg.slice(0,40)}"`, 'message')
     setMsg('')
   }
   return (
@@ -150,7 +153,7 @@ function TOMAcademic() {
 
 function TOMMeetings() {
   const { user, pushNotif } = useAuth()
-  const [meetings, setMeetings] = useState(mockMeetings)
+  const { mockMeetings, addMeeting } = useData()
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState({title:'',date:'',link:'',platform:'teams',invitees:[]})
   const ALLOWED = [
@@ -161,12 +164,12 @@ function TOMMeetings() {
     {name:'Abdulaziz (Quality)',role:'academic'},
   ]
   const toggle=(name,role)=>{const e=form.invitees.find(i=>i.name===name);setForm({...form,invitees:e?form.invitees.filter(i=>i.name!==name):[...form.invitees,{name,role}]})}
-  const create=()=>{
-    addMeeting({...form,createdBy:user?.name,createdByRole:'training_ops',participants:[user?.name,...form.invitees.map(i=>i.name)],participantRoles:['training_ops',...form.invitees.map(i=>i.role)],status:'upcoming'})
-    form.invitees.forEach(i=>pushNotif(i.role,`Meeting from ${user?.name}: "${form.title}"`, 'meeting'))
-    setMeetings([...mockMeetings]); setModal(false)
+  const create= async ()=>{
+    await addMeeting({...form,createdBy:user?.name,createdByRole:'training_ops',participants:[user?.name,...form.invitees.map(i=>i.name)],participantRoles:['training_ops',...form.invitees.map(i=>i.role)],status:'upcoming'})
+    for (const i of form.invitees) await pushNotif(i.role,`Meeting from ${user?.name}: "${form.title}"`, 'meeting')
+    setModal(false); setForm({title:'',date:'',link:'',platform:'teams',invitees:[]})
   }
-  const myMeetings = meetings.filter(m=>m.participantRoles?.includes('training_ops')||m.createdByRole==='training_ops')
+  const myMeetings = mockMeetings.filter(m=>m.participantRoles?.includes('training_ops')||m.createdByRole==='training_ops')
   return (
     <div className="space-y-3 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary flex items-center gap-1.5 text-xs"><Plus className="w-3.5 h-3.5"/>Schedule Meeting</button></div>
@@ -201,12 +204,13 @@ function TOMMeetings() {
 
 function TOMReports() {
   const { user, pushNotif } = useAuth()
-  const [form, setForm] = useState({type:'Operations Summary',period:'July 2024',content:''})
+  const { mockReports, addReport } = useData()
+  const [form, setForm] = useState({type:'Operations Summary',period:'',content:''})
   const [file, setFile] = useState(null)
   const [sent, setSent] = useState(false)
-  const send = () => {
-    addReport({from:user?.name,fromRole:'training_ops',to:'Principal',type:form.type,period:form.period,content:form.content+(file?` [File: ${file.name}]`:'')})
-    pushNotif('principal', `Report from ${user?.name}: "${form.type}"`, 'report')
+  const send = async () => {
+    await addReport({from:user?.name,fromRole:'training_ops',to:'Principal',type:form.type,period:form.period,content:form.content+(file?` [File: ${file.name}]`:'')})
+    await pushNotif('principal', `Report from ${user?.name}: "${form.type}"`, 'report')
     setSent(true); setTimeout(()=>setSent(false),2500)
   }
   return (
@@ -219,11 +223,7 @@ function TOMReports() {
               <option>Operations Summary</option><option>Training Progress</option><option>Academic Coordination</option><option>Team Performance</option>
             </select>
           </div>
-          <div><label className="label">Period</label>
-            <select className="input" value={form.period} onChange={e=>setForm({...form,period:e.target.value})}>
-              <option>July 2024</option><option>June 2024</option><option>Q3 2024</option><option>Q2 2024</option>
-            </select>
-          </div>
+          <div><label className="label">Period</label><input className="input" value={form.period} onChange={e=>setForm({...form,period:e.target.value})} placeholder="e.g. July 2024"/></div>
           <div><label className="label">Content</label><textarea className="input" rows={4} value={form.content} onChange={e=>setForm({...form,content:e.target.value})} placeholder="Report content…"/></div>
           <FileUploadBox onFile={setFile} label="Attach File" hint="Upload PDF, DOCX, or image report"/>
           {sent
@@ -250,9 +250,9 @@ function TOMReports() {
 }
 
 function TOMTasks() {
-  const [tasks, setTasks] = useState(mockTasks)
-  const update = (id,status) => { updateTask(id,status); setTasks([...mockTasks]) }
-  const myTasks = tasks.filter(t=>t.assignedToRole==='training_ops')
+  const { mockTasks, updateTask } = useData()
+  const myTasks = mockTasks.filter(t=>t.assignedToRole==='training_ops')
+  const update = async (id,status) => { await updateTask(id,status) }
   return (
     <div className="space-y-3 animate-fadeIn">
       {myTasks.length===0 && <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm text-center text-sm text-gray-400">No tasks assigned yet</div>}
@@ -274,4 +274,3 @@ function TOMTasks() {
     </div>
   )
 }
-

@@ -2,8 +2,8 @@ import { useState } from 'react'
 import Sidebar from '../../components/layout/Sidebar'
 import Header from '../../components/layout/Header'
 import { StatCard, StatusBadge, Badge, Table, SectionHeader, ProgressBar, Modal, MiniStat, SelectFilter, Card } from '../../components/ui'
-import { getStats, mockAssignments, mockStudents, mockCourses, mockComplaints, mockMeetings, mockSurveys, mockReports, mockAttendance, mockInstructors, mockCertificates, attendanceChart, sendMessage, mockMessages, addMeeting } from '../../utils/mockData'
 import { useAuth } from '../../context/AuthContext'
+import { useData } from '../../context/DataContext'
 import { GraduationCap, Users, BookOpen, AlertCircle, Calendar, BarChart3, Award, ClipboardList, ExternalLink, Send, Plus, FileText } from 'lucide-react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
@@ -34,6 +34,7 @@ export default function CaptainPortal() {
 }
 
 function CaptainOverview() {
+  const { getStats, attendanceChart, mockCourses, mockStudents, mockInstructors, mockComplaints, mockMeetings, mockSurveys, mockAttendance, mockAssignments, mockCertificates } = useData()
   const stats = getStats()
   const [drill, setDrill] = useState(null)
   return (
@@ -52,10 +53,10 @@ function CaptainOverview() {
       <div>
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">👥 Students</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="Total Students"   value={stats.totalStudents}  icon={GraduationCap} color="blue"   onClick={()=>setDrill('students_all')}  clickLabel="View by course"/>
-          <StatCard label="At-Risk Students" value={stats.atRisk}         icon={AlertCircle}   color="red"    onClick={()=>setDrill('students_risk')} clickLabel="View at-risk details"/>
-          <StatCard label="Avg Attendance"   value={`${stats.avgAttendance}%`} icon={ClipboardList} color="green" onClick={()=>setDrill('attendance')} clickLabel="View by course"/>
-          <StatCard label="Average GPA"      value={stats.avgGpa}         icon={BarChart3}     color="purple" onClick={()=>setDrill('gpa')}           clickLabel="View grades"/>
+          <StatCard label="Total Students"   value={stats.totalStudents}       icon={GraduationCap} color="blue"   onClick={()=>setDrill('students_all')}  clickLabel="View by course"/>
+          <StatCard label="At-Risk Students" value={stats.atRisk}              icon={AlertCircle}   color="red"    onClick={()=>setDrill('students_risk')} clickLabel="View at-risk details"/>
+          <StatCard label="Avg Attendance"   value={`${stats.avgAttendance}%`} icon={ClipboardList} color="green"  onClick={()=>setDrill('attendance')}    clickLabel="View by course"/>
+          <StatCard label="Average GPA"      value={stats.avgGpa}              icon={BarChart3}     color="purple" onClick={()=>setDrill('gpa')}           clickLabel="View grades"/>
         </div>
       </div>
 
@@ -72,14 +73,13 @@ function CaptainOverview() {
       <div>
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">⚙️ Operations</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="High Priority"    value={stats.highComplaints}   icon={AlertCircle} color="red"   onClick={()=>setDrill('complaints_high')}    clickLabel="View high priority"/>
-          <StatCard label="Pending Complaints" value={stats.pendingComplaints} icon={AlertCircle} color="amber" onClick={()=>setDrill('complaints_pending')} clickLabel="View pending"/>
-          <StatCard label="Meetings"         value={stats.upcomingMeetings} icon={Calendar}    color="blue"  onClick={()=>setDrill('meetings')}           clickLabel="View meetings"/>
-          <StatCard label="Active Surveys"   value={stats.activeSurveys}    icon={ClipboardList} color="teal" onClick={()=>setDrill('surveys')}           clickLabel="View surveys"/>
+          <StatCard label="High Priority"     value={stats.highComplaints}    icon={AlertCircle}   color="red"   onClick={()=>setDrill('complaints_high')}    clickLabel="View high priority"/>
+          <StatCard label="Pending Complaints"value={stats.pendingComplaints} icon={AlertCircle}   color="amber" onClick={()=>setDrill('complaints_pending')} clickLabel="View pending"/>
+          <StatCard label="Meetings"          value={stats.upcomingMeetings}  icon={Calendar}      color="blue"  onClick={()=>setDrill('meetings')}           clickLabel="View meetings"/>
+          <StatCard label="Active Surveys"    value={stats.activeSurveys}     icon={ClipboardList} color="teal"  onClick={()=>setDrill('surveys')}            clickLabel="View surveys"/>
         </div>
       </div>
 
-      {/* Charts */}
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
           <SectionHeader title="Attendance Trend — 6 Weeks"/>
@@ -108,7 +108,6 @@ function CaptainOverview() {
         </Card>
       </div>
 
-      {/* ── Drill-Down Modals ── */}
       <Modal open={drill==='students_all'} onClose={()=>setDrill(null)} title="Students by Course" wide>
         <div className="space-y-3">
           <div className="flex gap-3 mb-4">
@@ -123,11 +122,7 @@ function CaptainOverview() {
               {mockStudents.filter(s=>s.courses?.includes(c.id)).map(s=>(
                 <div key={s.id} className="flex justify-between text-xs py-1.5 border-b border-gray-50 last:border-0">
                   <span className="font-medium text-gray-800">{s.name}</span>
-                  <div className="flex gap-3">
-                    <span className="text-gray-400">Att: {s.attendanceRate}%</span>
-                    <span className="text-gray-400">GPA: {s.gpa}</span>
-                    <StatusBadge status={s.status}/>
-                  </div>
+                  <div className="flex gap-3"><span className="text-gray-400">Att: {s.attendanceRate}%</span><span className="text-gray-400">GPA: {s.gpa}</span><StatusBadge status={s.status}/></div>
                 </div>
               ))}
             </div>
@@ -139,11 +134,7 @@ function CaptainOverview() {
         {mockStudents.filter(s=>s.status==='at-risk').map(s=>(
           <div key={s.id} className="mb-4 p-4 border border-red-100 bg-red-50/30 rounded-xl">
             <div className="flex justify-between mb-3"><p className="font-bold text-gray-900">{s.name}</p><StatusBadge status={s.status}/></div>
-            <div className="flex gap-3 mb-3">
-              <MiniStat label="Attendance" value={`${s.attendanceRate}%`} color="red"/>
-              <MiniStat label="GPA" value={s.gpa} color="amber"/>
-              <MiniStat label="Courses" value={s.courses?.length||0} color="gray"/>
-            </div>
+            <div className="flex gap-3 mb-3"><MiniStat label="Attendance" value={`${s.attendanceRate}%`} color="red"/><MiniStat label="GPA" value={s.gpa} color="amber"/><MiniStat label="Courses" value={s.courses?.length||0} color="gray"/></div>
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Risk Factors</p>
               {s.attendanceRate < 70 && <p className="text-xs text-red-600">• Attendance below 70% ({s.attendanceRate}%)</p>}
@@ -183,7 +174,7 @@ function CaptainOverview() {
         {mockCourses.map(c=>(
           <div key={c.id} className="mb-3 p-3 border border-gray-100 rounded-xl">
             <div className="flex justify-between mb-1"><p className="font-semibold text-sm">{c.name}</p><Badge color="teal">{c.progress}%</Badge></div>
-            <p className="text-xs text-gray-400 mb-1.5">{c.instructor} · {c.students} students · Next: {c.nextClass}</p>
+            <p className="text-xs text-gray-400 mb-1.5">{c.instructor} · {c.enrolledStudents?.length||0} students · Next: {c.nextClass}</p>
             <ProgressBar value={c.progress} color="teal" size="lg"/>
           </div>
         ))}
@@ -246,6 +237,7 @@ function CaptainOverview() {
 }
 
 function CaptainStudents() {
+  const { mockStudents, mockCourses } = useData()
   const [courseId, setCourseId] = useState('')
   const [statusF,  setStatusF]  = useState('')
   const filtered = mockStudents.filter(s=>(courseId===''||s.courses?.includes(parseInt(courseId)))&&(statusF===''||s.status===statusF))
@@ -274,24 +266,17 @@ function CaptainStudents() {
 }
 
 function CaptainInstructors() {
+  const { mockInstructors, mockCourses, mockStudents } = useData()
   const [sel, setSel] = useState(null)
   return (
     <div className="space-y-3 animate-fadeIn">
       {mockInstructors.map(ins=>(
         <Card key={ins.id} className="cursor-pointer hover:shadow-md transition-all" onClick={()=>setSel(ins)}>
           <div className="flex items-start justify-between">
-            <div>
-              <p className="font-semibold text-gray-900">{ins.name}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{ins.sub} · {ins.email}</p>
-            </div>
-            <div className="flex gap-2">
-              <Badge color="blue">{ins.students} students</Badge>
-              <StatusBadge status={ins.status}/>
-            </div>
+            <div><p className="font-semibold text-gray-900">{ins.name}</p><p className="text-xs text-gray-400 mt-0.5">{ins.sub} · {ins.email}</p></div>
+            <div className="flex gap-2"><Badge color="blue">{ins.students} students</Badge><StatusBadge status={ins.status}/></div>
           </div>
-          <div className="mt-2">
-            <p className="text-xs text-gray-400">Courses: {ins.courses?.map(cid=>mockCourses.find(c=>c.id===cid)?.name).filter(Boolean).join(', ')||'—'}</p>
-          </div>
+          <div className="mt-2"><p className="text-xs text-gray-400">Courses: {ins.courses?.map(cid=>mockCourses.find(c=>c.id===cid)?.name).filter(Boolean).join(', ')||'—'}</p></div>
           <p className="text-[10px] text-blue-500 mt-2">↗ Click to see students</p>
         </Card>
       ))}
@@ -327,13 +312,14 @@ function CaptainInstructors() {
 }
 
 function CaptainCourses() {
+  const { mockCourses, mockStudents } = useData()
   const [sel, setSel] = useState(null)
   return (
     <div className="space-y-3 animate-fadeIn">
       {mockCourses.map(c=>(
         <Card key={c.id} className="cursor-pointer hover:shadow-md transition-all" onClick={()=>setSel(c)}>
           <div className="flex justify-between mb-2">
-            <div><p className="font-semibold text-gray-900">{c.name}</p><p className="text-xs text-gray-400">{c.instructor} · {c.students} students · Next: {c.nextClass}</p></div>
+            <div><p className="font-semibold text-gray-900">{c.name}</p><p className="text-xs text-gray-400">{c.instructor} · {c.enrolledStudents?.length||0} students · Next: {c.nextClass}</p></div>
             <Badge color="teal">{c.progress}%</Badge>
           </div>
           <ProgressBar value={c.progress} color="teal" size="lg"/>
@@ -344,7 +330,7 @@ function CaptainCourses() {
         {sel && (
           <div className="space-y-4">
             <div className="flex gap-3">
-              <MiniStat label="Students" value={sel.students} color="blue"/>
+              <MiniStat label="Students" value={sel.enrolledStudents?.length||0} color="blue"/>
               <MiniStat label="Progress" value={`${sel.progress}%`} color="teal"/>
             </div>
             <Table columns={[{key:'name',label:'Student',render:v=><span className="font-medium">{v}</span>},{key:'attendanceRate',label:'Attendance',render:v=><span className={v>=80?'text-green-600':v>=60?'text-amber-500':'text-red-500'}>{v}%</span>},{key:'gpa',label:'GPA'},{key:'status',label:'Status',render:v=><StatusBadge status={v}/>}]} data={mockStudents.filter(s=>s.courses?.includes(sel.id))} emptyMsg="No students enrolled."/>
@@ -360,6 +346,7 @@ function CaptainCourses() {
 }
 
 function CaptainAttendance() {
+  const { mockAttendance, mockCourses } = useData()
   const [cid, setCid] = useState('')
   const recs = mockAttendance.filter(a=>cid===''||a.courseId===parseInt(cid))
   const rate = recs.length?Math.round(recs.filter(r=>r.status==='present').length/recs.length*100):0
@@ -384,6 +371,7 @@ function CaptainAttendance() {
 }
 
 function CaptainComplaints() {
+  const { mockComplaints } = useData()
   const [priority, setPriority] = useState('')
   const [status,   setStatus]   = useState('')
   const filtered = mockComplaints.filter(c=>(priority===''||c.priority===priority)&&(status===''||c.status===status))
@@ -406,6 +394,7 @@ function CaptainComplaints() {
 }
 
 function CaptainSurveys() {
+  const { mockSurveys } = useData()
   return (
     <div className="space-y-3 animate-fadeIn">
       {mockSurveys.map(s=>(
@@ -419,23 +408,22 @@ function CaptainSurveys() {
 }
 
 function CaptainMeetings() {
-  const { pushNotif } = useAuth()
-  const [meetings, setMeetings] = useState(mockMeetings)
-  const [modal, setModal]   = useState(false)
-  const [form, setForm]     = useState({title:'',date:'',link:'',platform:'teams',invitees:[]})
+  const { user, pushNotif } = useAuth()
+  const { mockMeetings, addMeeting } = useData()
+  const [modal, setModal] = useState(false)
+  const [form, setForm]   = useState({title:'',date:'',link:'',platform:'teams',invitees:[]})
   const ALLOWED = [{name:'Principal',role:'principal'},{name:'Mohammad Abdullah (Foundation Lead)',role:'foundation_lead'}]
   const toggle  = (name,role)=>{ const e=form.invitees.find(i=>i.name===name); setForm({...form,invitees:e?form.invitees.filter(i=>i.name!==name):[...form.invitees,{name,role}]}) }
-  const create  = ()=>{
-    if(!form.title||!form.date){return}
-    addMeeting({...form,createdBy:'Captain Turki',createdByRole:'captain',participants:['Captain Turki',...form.invitees.map(i=>i.name)],participantRoles:['captain',...form.invitees.map(i=>i.role)],status:'upcoming'})
-    form.invitees.forEach(i=>pushNotif(i.role,`Captain Turki scheduled: "${form.title}"`, 'meeting'))
-    setMeetings([...mockMeetings]); setModal(false)
-    setForm({title:'',date:'',link:'',platform:'teams',invitees:[]})
+  const create  = async ()=>{
+    if(!form.title||!form.date) return
+    await addMeeting({...form,createdBy:user?.name,createdByRole:'captain',participants:[user?.name,...form.invitees.map(i=>i.name)],participantRoles:['captain',...form.invitees.map(i=>i.role)],status:'upcoming'})
+    for (const i of form.invitees) await pushNotif(i.role,`${user?.name} scheduled: "${form.title}"`, 'meeting')
+    setModal(false); setForm({title:'',date:'',link:'',platform:'teams',invitees:[]})
   }
   return (
     <div className="space-y-3 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Schedule Meeting</button></div>
-      {meetings.map(m=>(
+      {mockMeetings.map(m=>(
         <Card key={m.id} className="flex justify-between items-start">
           <div>
             <div className="flex gap-2 mb-1"><p className="font-semibold text-gray-900">{m.title}</p><StatusBadge status={m.status}/></div>
@@ -468,6 +456,7 @@ function CaptainMeetings() {
 }
 
 function CaptainReports() {
+  const { mockReports } = useData()
   return (
     <div className="space-y-3 animate-fadeIn">
       {mockReports.map(r=>(
@@ -482,15 +471,16 @@ function CaptainReports() {
 }
 
 function CaptainMessages() {
-  const { pushNotif } = useAuth()
+  const { user, pushNotif } = useAuth()
+  const { mockMessages, sendMessage } = useData()
   const [form, setForm] = useState({to:'foundation_lead',text:''})
   const msgs = mockMessages.filter(m=>m.fromRole==='captain'||m.toRole==='captain')
   const CONTACTS = [{role:'principal',name:'Principal'},{role:'foundation_lead',name:'Mohammad Abdullah'}]
-  const send = ()=>{
+  const send = async ()=>{
     if(!form.text.trim()) return
     const c=CONTACTS.find(x=>x.role===form.to)
-    sendMessage({fromRole:'captain',from:'Captain Turki',toRole:form.to,to:c?.name,text:form.text})
-    pushNotif(form.to,`Captain Turki: "${form.text.slice(0,40)}"`, 'message')
+    await sendMessage({fromRole:'captain',from:user?.name,toRole:form.to,to:c?.name,text:form.text})
+    await pushNotif(form.to,`${user?.name}: "${form.text.slice(0,40)}"`, 'message')
     setForm({...form,text:''})
   }
   return (
@@ -519,5 +509,3 @@ function CaptainMessages() {
     </div>
   )
 }
-
-// need these

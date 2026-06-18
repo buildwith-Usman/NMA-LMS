@@ -2,8 +2,8 @@ import { useState } from 'react'
 import Sidebar from '../../components/layout/Sidebar'
 import Header from '../../components/layout/Header'
 import { StatCard, StatusBadge, Badge, Table, SectionHeader, Modal, ProgressBar, MiniStat, SelectFilter, Card, FileUploadBox, CertificatePDF } from '../../components/ui'
-import { getStats, mockStudents, mockCourses, mockInstructors, mockComplaints, mockMeetings, mockTasks, mockReports, mockMessages, mockCertificates, mockSurveys, mockAttendance, attendanceChart, addMeeting, addTask, updateTask, addReport, sendMessage, issueCertificate, addSurvey, updateComplaint } from '../../utils/mockData'
 import { useAuth } from '../../context/AuthContext'
+import { useData } from '../../context/DataContext'
 import { GraduationCap, Users, BookOpen, AlertCircle, Calendar, BarChart3, CheckSquare, Send, Plus, ExternalLink, Award, ClipboardList } from 'lucide-react'
 
 const PAGES = { dashboard:'Foundation Dashboard', team:'My Team', courses:'Courses', students:'Students', attendance:'Attendance', complaints:'Complaints', tasks:'Assign Tasks', surveys:'Surveys', certificates:'Certificates', meetings:'Meetings', messages:'Messages', reports:'Reports' }
@@ -35,6 +35,8 @@ export default function FoundationPortal() {
 }
 
 function FLDash() {
+  const { user } = useAuth()
+  const { getStats, mockCourses, mockStudents, mockComplaints, mockTasks, mockSurveys, mockMeetings, mockAttendance } = useData()
   const stats = getStats()
   const [drill, setDrill] = useState(null)
   return (
@@ -43,7 +45,7 @@ function FLDash() {
         <div className="flex justify-between items-start">
           <div>
             <p className="text-white/60 text-xs">Foundation Lead</p>
-            <h2 className="font-bold text-2xl mt-0.5">Mohammad Abdullah 🧭</h2>
+            <h2 className="font-bold text-2xl mt-0.5">{user?.name} 🧭</h2>
             <p className="text-white/50 text-sm mt-1">Click any stat for detailed breakdown</p>
           </div>
           <div className="text-5xl opacity-10">🧭</div>
@@ -53,23 +55,22 @@ function FLDash() {
       <div>
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">👥 Academy Status</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="Total Students"   value={stats.totalStudents}    icon={GraduationCap} color="blue"   onClick={()=>setDrill('students')}   clickLabel="View by course"/>
-          <StatCard label="At-Risk Students" value={stats.atRisk}           icon={AlertCircle}   color="red"    onClick={()=>setDrill('atrisk')}     clickLabel="View details"/>
-          <StatCard label="Active Courses"   value={stats.activeCourses}    icon={BookOpen}      color="teal"   onClick={()=>setDrill('courses')}    clickLabel="View courses"/>
-          <StatCard label="Avg Attendance"   value={`${stats.avgAttendance}%`} icon={BarChart3}  color="green"  onClick={()=>setDrill('attendance')} clickLabel="By course"/>
+          <StatCard label="Total Students"   value={stats.totalStudents}       icon={GraduationCap} color="blue"   onClick={()=>setDrill('students')}   clickLabel="View by course"/>
+          <StatCard label="At-Risk Students" value={stats.atRisk}              icon={AlertCircle}   color="red"    onClick={()=>setDrill('atrisk')}     clickLabel="View details"/>
+          <StatCard label="Active Courses"   value={stats.activeCourses}       icon={BookOpen}      color="teal"   onClick={()=>setDrill('courses')}    clickLabel="View courses"/>
+          <StatCard label="Avg Attendance"   value={`${stats.avgAttendance}%`} icon={BarChart3}     color="green"  onClick={()=>setDrill('attendance')} clickLabel="By course"/>
         </div>
       </div>
       <div>
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">⚙️ Operations</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="Pending Complaints" value={stats.pendingComplaints}  icon={AlertCircle}  color="amber"  onClick={()=>setDrill('complaints')} clickLabel="View complaints"/>
-          <StatCard label="Pending Tasks"      value={stats.pendingTasks}       icon={CheckSquare}  color="orange" onClick={()=>setDrill('tasks')}      clickLabel="View tasks"/>
-          <StatCard label="Active Surveys"     value={stats.activeSurveys}      icon={ClipboardList}color="purple" onClick={()=>setDrill('surveys')}    clickLabel="View surveys"/>
-          <StatCard label="Meetings"           value={stats.upcomingMeetings}   icon={Calendar}     color="indigo" onClick={()=>setDrill('meetings')}   clickLabel="View meetings"/>
+          <StatCard label="Pending Complaints" value={stats.pendingComplaints}  icon={AlertCircle}   color="amber"  onClick={()=>setDrill('complaints')} clickLabel="View complaints"/>
+          <StatCard label="Pending Tasks"      value={stats.pendingTasks}       icon={CheckSquare}   color="orange" onClick={()=>setDrill('tasks')}      clickLabel="View tasks"/>
+          <StatCard label="Active Surveys"     value={stats.activeSurveys}      icon={ClipboardList} color="purple" onClick={()=>setDrill('surveys')}    clickLabel="View surveys"/>
+          <StatCard label="Meetings"           value={stats.upcomingMeetings}   icon={Calendar}      color="indigo" onClick={()=>setDrill('meetings')}   clickLabel="View meetings"/>
         </div>
       </div>
 
-      {/* Drill-down Modals */}
       <Modal open={drill==='students'} onClose={()=>setDrill(null)} title="Students by Course" wide>
         <div className="flex gap-2 mb-4"><MiniStat label="Total" value={stats.totalStudents} color="blue"/><MiniStat label="Active" value={stats.activeStudents} color="green"/><MiniStat label="At Risk" value={stats.atRisk} color="red"/></div>
         {mockCourses.map(c=>(
@@ -98,7 +99,7 @@ function FLDash() {
         {mockCourses.map(c=>(
           <div key={c.id} className="mb-3 p-3 border border-gray-100 rounded-xl">
             <div className="flex justify-between mb-1"><p className="font-semibold text-sm">{c.name}</p><Badge color="teal">{c.progress}%</Badge></div>
-            <p className="text-xs text-gray-400">{c.instructor} · {c.students} students</p>
+            <p className="text-xs text-gray-400">{c.instructor} · {c.enrolledStudents?.length||0} students</p>
             <ProgressBar value={c.progress} color="teal" size="lg" />
           </div>
         ))}
@@ -160,12 +161,13 @@ function FLTeam() {
 }
 
 function FLCourses() {
+  const { mockCourses, mockStudents } = useData()
   const [sel, setSel] = useState(null)
   return (
     <div className="space-y-3 animate-fadeIn">
       {mockCourses.map(c=>(
         <Card key={c.id} className="cursor-pointer hover:shadow-md transition-all" onClick={()=>setSel(c)}>
-          <div className="flex justify-between mb-2"><div><p className="font-semibold">{c.name}</p><p className="text-xs text-gray-400">{c.instructor} · {c.students} students · Next: {c.nextClass}</p></div><Badge color="teal">{c.progress}%</Badge></div>
+          <div className="flex justify-between mb-2"><div><p className="font-semibold">{c.name}</p><p className="text-xs text-gray-400">{c.instructor} · {c.enrolledStudents?.length||0} students · Next: {c.nextClass}</p></div><Badge color="teal">{c.progress}%</Badge></div>
           <ProgressBar value={c.progress} color="teal" size="lg"/>
           <p className="text-[10px] text-blue-500 mt-2">↗ Click to see enrolled students</p>
         </Card>
@@ -178,6 +180,7 @@ function FLCourses() {
 }
 
 function FLStudents() {
+  const { mockStudents, mockCourses } = useData()
   const [cid, setCid] = useState('')
   const filtered = mockStudents.filter(s=>cid===''||s.courses?.includes(parseInt(cid)))
   return (
@@ -189,6 +192,7 @@ function FLStudents() {
 }
 
 function FLAttendance() {
+  const { mockAttendance, mockCourses } = useData()
   const [cid, setCid] = useState('')
   const recs = mockAttendance.filter(a=>cid===''||a.courseId===parseInt(cid))
   const rate = recs.length?Math.round(recs.filter(r=>r.status==='present').length/recs.length*100):0
@@ -203,13 +207,14 @@ function FLAttendance() {
 
 function FLComplaints() {
   const { user } = useAuth()
+  const { mockComplaints, updateComplaint } = useData()
   const [priority, setPriority] = useState('')
   const [status,   setStatus]   = useState('')
   const [modal, setModal]   = useState(null)
   const [note, setNote]     = useState('')
   const filtered = mockComplaints.filter(c=>(priority===''||c.priority===priority)&&(status===''||c.status===status))
-  const update = (id, st)=>{
-    updateComplaint(id, st, note, 'Mohammad Abdullah')
+  const update = async (id, st)=>{
+    await updateComplaint(id, st, note, user?.name)
     setModal(null); setNote('')
   }
   return (
@@ -250,26 +255,25 @@ function FLComplaints() {
 }
 
 function FLTasks() {
-  const { pushNotif } = useAuth()
-  const [tasks, setTasks] = useState(mockTasks)
+  const { user, pushNotif } = useAuth()
+  const { mockTasks, addTask, updateTask } = useData()
   const [modal, setModal] = useState(false)
   const [form, setForm]   = useState({title:'',assignedTo:'Abdullmhun',assignedToRole:'affairs',dueDate:'',priority:'medium',note:''})
   const TEAM = [{name:'Abdullmhun',role:'affairs'},{name:'Muflih',role:'affairs'},{name:'Asad',role:'training_ops'},{name:'Stuart',role:'training_ops'},{name:'Essam',role:'instructor'},{name:'Mohammed Khery',role:'instructor'}]
-  const add = ()=>{
+  const add = async ()=>{
     if(!form.title) return
     const t=TEAM.find(x=>x.name===form.assignedTo)
-    addTask({...form,assignedToRole:t?.role||'affairs'})
-    pushNotif(t?.role||'affairs',`Task from Foundation Lead: "${form.title}"`, 'task')
-    setTasks([...mockTasks]); setModal(false)
-    setForm({title:'',assignedTo:'Abdullmhun',assignedToRole:'affairs',dueDate:'',priority:'medium',note:''})
+    await addTask({...form,assignedBy:user?.name,assignedToRole:t?.role||'affairs'})
+    await pushNotif(t?.role||'affairs',`Task from ${user?.name}: "${form.title}"`, 'task')
+    setModal(false); setForm({title:'',assignedTo:'Abdullmhun',assignedToRole:'affairs',dueDate:'',priority:'medium',note:''})
   }
-  const update = (id,status)=>{ updateTask(id,status); setTasks([...mockTasks]) }
+  const update = async (id,status)=>{ await updateTask(id,status) }
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Assign Task</button></div>
       <Card>
         <div className="space-y-2">
-          {tasks.map(t=>(
+          {mockTasks.map(t=>(
             <div key={t.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-xl">
               <div><p className="font-medium text-sm text-gray-900">{t.title}</p><p className="text-xs text-gray-400">→ {t.assignedTo} · Due: {t.dueDate}</p></div>
               <div className="flex gap-2 items-center"><Badge color={t.priority==='high'?'red':t.priority==='medium'?'amber':'green'}>{t.priority}</Badge><StatusBadge status={t.status}/></div>
@@ -292,20 +296,20 @@ function FLTasks() {
 }
 
 function FLSurveys() {
-  const { pushNotif } = useAuth()
+  const { user, pushNotif } = useAuth()
+  const { mockSurveys, mockStudents, addSurvey } = useData()
   const [modal, setModal] = useState(false)
-  const [surveys, setSurveys] = useState(mockSurveys)
   const [form, setForm] = useState({title:'',deadline:'',questions:['','']})
-  const create = ()=>{
+  const create = async ()=>{
     const qs=form.questions.filter(q=>q.trim()).map((q,i)=>({id:i+1,text:q}))
-    addSurvey({title:form.title,createdBy:'Mohammad Abdullah',deadline:form.deadline,status:'active',sentTo:'students',questions:qs,sent:mockStudents.length})
-    pushNotif('student',`New survey: "${form.title}"`, 'survey')
-    setSurveys([...mockSurveys]); setModal(false)
+    await addSurvey({title:form.title,createdBy:user?.name,deadline:form.deadline,status:'active',sentTo:'students',questions:qs,sent:mockStudents.length})
+    await pushNotif('student',`New survey: "${form.title}"`, 'survey')
+    setModal(false); setForm({title:'',deadline:'',questions:['','']})
   }
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Create Survey</button></div>
-      {surveys.map(s=>(
+      {mockSurveys.map(s=>(
         <Card key={s.id}>
           <div className="flex justify-between mb-2"><div><p className="font-semibold">{s.title}</p><p className="text-xs text-gray-400">By {s.createdBy} · Due: {s.deadline}</p></div><StatusBadge status={s.status}/></div>
           <div className="flex items-center gap-3"><span className="text-sm font-bold text-teal-600">{s.responses.length}</span><span className="text-xs text-gray-400">/ {s.sent} responded</span><div className="flex-1"><ProgressBar value={(s.responses.length/s.sent)*100} color="teal" size="lg"/></div></div>
@@ -330,24 +334,24 @@ function FLSurveys() {
 }
 
 function FLCertificates() {
-  const { pushNotif } = useAuth()
+  const { user, pushNotif } = useAuth()
+  const { mockStudents, mockCourses, mockCertificates, issueCertificate } = useData()
   const [modal, setModal]   = useState(false)
   const [viewCert, setViewCert] = useState(null)
-  const [certs, setCerts]   = useState(mockCertificates)
   const [form, setForm]     = useState({studentId:'',courseId:'',grade:'A'})
-  const issue = ()=>{
+  const issue = async ()=>{
     const s=mockStudents.find(x=>x.id===parseInt(form.studentId))
     const c=mockCourses.find(x=>x.id===parseInt(form.courseId))
     if(!s||!c) return
-    issueCertificate({studentId:s.id,studentName:s.name,courseId:c.id,courseName:c.name,issuedBy:'Mohammad Abdullah',grade:form.grade})
-    pushNotif('student',`Certificate issued: "${c.name}"`, 'certificate')
-    setCerts([...mockCertificates]); setModal(false)
+    await issueCertificate({studentId:s.id,studentName:s.name,courseId:c.id,courseName:c.name,issuedBy:user?.name,grade:form.grade})
+    await pushNotif('student',`Certificate issued: "${c.name}"`, 'certificate')
+    setModal(false); setForm({studentId:'',courseId:'',grade:'A'})
   }
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Award className="w-3.5 h-3.5"/>Issue Certificate</button></div>
       <Card>
-        <Table columns={[{key:'studentName',label:'Student'},{key:'courseName',label:'Course'},{key:'grade',label:'Grade'},{key:'issuedBy',label:'Issued By'},{key:'issuedAt',label:'Date'},{key:'id',label:'',render:(_,row)=><button onClick={()=>setViewCert(row)} className="text-xs text-blue-600 hover:underline">View</button>}]} data={certs}/>
+        <Table columns={[{key:'studentName',label:'Student'},{key:'courseName',label:'Course'},{key:'grade',label:'Grade'},{key:'issuedBy',label:'Issued By'},{key:'issuedAt',label:'Date'},{key:'id',label:'',render:(_,row)=><button onClick={()=>setViewCert(row)} className="text-xs text-blue-600 hover:underline">View</button>}]} data={mockCertificates}/>
       </Card>
       <Modal open={modal} onClose={()=>setModal(false)} title="Issue Certificate">
         <div className="space-y-4">
@@ -363,26 +367,25 @@ function FLCertificates() {
 }
 
 function FLMeetings() {
-  const { pushNotif } = useAuth()
-  const [meetings, setMeets] = useState(mockMeetings)
-  const [modal, setModal]    = useState(false)
-  const [form, setForm]      = useState({title:'',date:'',link:'',platform:'teams',invitees:[]})
+  const { user, pushNotif } = useAuth()
+  const { mockMeetings, addMeeting } = useData()
+  const [modal, setModal] = useState(false)
+  const [form, setForm]   = useState({title:'',date:'',link:'',platform:'teams',invitees:[]})
   const ALLOWED = [
-    {name:'Captain Turki',role:'captain'},{name:'Principal',role:'principal'},
+    {name:'Captain',role:'captain'},{name:'Principal',role:'principal'},
     {name:'Abdullmhun',role:'affairs'},{name:'Muflih',role:'affairs'},
     {name:'Asad',role:'training_ops'},{name:'Stuart',role:'training_ops'},
     {name:'Essam',role:'instructor'},{name:'Mohammed Khery',role:'instructor'},
     {name:'Mohammed Soliman',role:'instructor'},
   ]
   const toggle = (name,role)=>{const e=form.invitees.find(i=>i.name===name);setForm({...form,invitees:e?form.invitees.filter(i=>i.name!==name):[...form.invitees,{name,role}]})}
-  const create = ()=>{
+  const create = async ()=>{
     if(!form.title||!form.date) return
-    addMeeting({...form,createdBy:'Mohammad Abdullah',createdByRole:'foundation_lead',participants:['Mohammad Abdullah',...form.invitees.map(i=>i.name)],participantRoles:['foundation_lead',...form.invitees.map(i=>i.role)],status:'upcoming'})
-    form.invitees.forEach(i=>pushNotif(i.role,`Foundation Lead scheduled: "${form.title}"`, 'meeting'))
-    setMeets([...mockMeetings]); setModal(false)
-    setForm({title:'',date:'',link:'',platform:'teams',invitees:[]})
+    await addMeeting({...form,createdBy:user?.name,createdByRole:'foundation_lead',participants:[user?.name,...form.invitees.map(i=>i.name)],participantRoles:['foundation_lead',...form.invitees.map(i=>i.role)],status:'upcoming'})
+    for (const i of form.invitees) await pushNotif(i.role,`${user?.name} scheduled: "${form.title}"`, 'meeting')
+    setModal(false); setForm({title:'',date:'',link:'',platform:'teams',invitees:[]})
   }
-  const myMeetings = meetings.filter(m=>m.participantRoles?.includes('foundation_lead')||m.createdByRole==='foundation_lead')
+  const myMeetings = mockMeetings.filter(m=>m.participantRoles?.includes('foundation_lead')||m.createdByRole==='foundation_lead')
   return (
     <div className="space-y-3 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Schedule Meeting</button></div>
@@ -421,15 +424,16 @@ function FLMeetings() {
 }
 
 function FLMessages() {
-  const { pushNotif } = useAuth()
+  const { user, pushNotif } = useAuth()
+  const { mockMessages, sendMessage } = useData()
   const [form, setForm] = useState({to:'captain',text:''})
   const msgs = mockMessages.filter(m=>m.fromRole==='foundation_lead'||m.toRole==='foundation_lead')
-  const CONTACTS = [{role:'captain',name:'Captain Turki'},{role:'principal',name:'Principal'},{role:'affairs',name:'Affairs Team'},{role:'training_ops',name:'Training Ops'},{role:'instructor',name:'Instructors'}]
-  const send = ()=>{
+  const CONTACTS = [{role:'captain',name:'Captain'},{role:'principal',name:'Principal'},{role:'affairs',name:'Affairs Team'},{role:'training_ops',name:'Training Ops'},{role:'instructor',name:'Instructors'}]
+  const send = async ()=>{
     if(!form.text.trim()) return
     const c=CONTACTS.find(x=>x.role===form.to)
-    sendMessage({fromRole:'foundation_lead',from:'Mohammad Abdullah',toRole:form.to,to:c?.name,text:form.text})
-    pushNotif(form.to,`Foundation Lead: "${form.text.slice(0,40)}"`, 'message')
+    await sendMessage({fromRole:'foundation_lead',from:user?.name,toRole:form.to,to:c?.name,text:form.text})
+    await pushNotif(form.to,`${user?.name}: "${form.text.slice(0,40)}"`, 'message')
     setForm({...form,text:''})
   }
   return (
@@ -460,14 +464,15 @@ function FLMessages() {
 }
 
 function FLReports() {
-  const { pushNotif } = useAuth()
-  const [form, setForm] = useState({to:'captain',type:'Foundation Summary',period:'July 2024',content:''})
+  const { user, pushNotif } = useAuth()
+  const { mockReports, addReport } = useData()
+  const [form, setForm] = useState({to:'captain',type:'Foundation Summary',period:'',content:''})
   const [file, setFile] = useState(null)
   const [sent, setSent] = useState(false)
-  const send = ()=>{
+  const send = async ()=>{
     if(!form.content.trim()) return
-    addReport({from:'Mohammad Abdullah',fromRole:'foundation_lead',to:form.to==='captain'?'Captain Turki':'Principal',type:form.type,period:form.period,content:form.content+(file?` [Attachment: ${file.name}]`:''),fileName:file?.name||null})
-    pushNotif(form.to,`Report from Foundation Lead: "${form.type}"`, 'report')
+    await addReport({from:user?.name,fromRole:'foundation_lead',to:form.to==='captain'?'Captain':'Principal',type:form.type,period:form.period,content:form.content+(file?` [Attachment: ${file.name}]`:''),fileName:file?.name||null})
+    await pushNotif(form.to,`Report from ${user?.name}: "${form.type}"`, 'report')
     setSent(true); setTimeout(()=>setSent(false),2500)
   }
   return (
@@ -475,7 +480,7 @@ function FLReports() {
       <Card>
         <SectionHeader title="Submit Report"/>
         <div className="space-y-3">
-          <div><label className="label">Send To</label><select className="input" value={form.to} onChange={e=>setForm({...form,to:e.target.value})}><option value="captain">Captain Turki</option><option value="principal">Principal</option></select></div>
+          <div><label className="label">Send To</label><select className="input" value={form.to} onChange={e=>setForm({...form,to:e.target.value})}><option value="captain">Captain</option><option value="principal">Principal</option></select></div>
           <div><label className="label">Type</label><select className="input" value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option>Foundation Summary</option><option>Student Performance</option><option>Complaint Report</option><option>Attendance Report</option></select></div>
           <div><label className="label">Content</label><textarea className="input" rows={4} value={form.content} onChange={e=>setForm({...form,content:e.target.value})} placeholder="Report content…"/></div>
           <FileUploadBox onFile={setFile} label="Attach File" hint="Upload PDF, DOCX, or image"/>

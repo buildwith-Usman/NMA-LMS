@@ -2,13 +2,11 @@ import { useState } from 'react'
 import Sidebar from '../../components/layout/Sidebar'
 import Header from '../../components/layout/Header'
 import { StatCard, StatusBadge, Badge, Table, SectionHeader, Modal, ProgressBar, MiniStat, Card, CertificatePDF } from '../../components/ui'
-import { mockStudents, mockCourses, mockAssignments, mockQuizzes, mockAttendance, mockSurveys, mockComplaints, mockMeetings, mockCertificates, submitAssignment, submitQuiz, submitSurveyResponse, addComplaint } from '../../utils/mockData'
 import { useAuth } from '../../context/AuthContext'
+import { useData } from '../../context/DataContext'
 import { BookOpen, FileText, CheckSquare, Video, ClipboardList, BarChart3, Send, Award, AlertCircle, ExternalLink, Youtube, Timer } from 'lucide-react'
 
 const PAGES = { dashboard:'Student Dashboard', courses:'My Courses', assignments:'Assignments', quizzes:'Quizzes', liveclass:'Live Class', attendance:'My Attendance', grades:'Grades & Progress', surveys:'Surveys', complaints:'Complaints', certificates:'Certificates' }
-
-const MY_STUDENT_ID = 18 // Ahmed is logged in
 
 export default function StudentPortal() {
   const [active, setActive] = useState('dashboard')
@@ -34,16 +32,21 @@ export default function StudentPortal() {
   )
 }
 
-function me() { return mockStudents.find(s=>s.id===MY_STUDENT_ID) }
+function useStudent() {
+  const { user } = useAuth()
+  const { mockStudents } = useData()
+  return mockStudents.find(s => s.authId === user?.id) || null
+}
 
 function StDash({ onNavigate }) {
   const { user } = useAuth()
-  const student = me()
-  const myCourses = mockCourses.filter(c=>student?.courses?.includes(c.id))
-  const myAsgn   = mockAssignments.filter(a=>student?.courses?.includes(a.courseId))
-  const pending  = myAsgn.filter(a=>!a.submissions.find(s=>s.studentId===MY_STUDENT_ID))
-  const myCerts  = mockCertificates.filter(c=>c.studentId===MY_STUDENT_ID)
-  const unreadSurveys = mockSurveys.filter(s=>!s.responses.find(r=>r.studentId===MY_STUDENT_ID))
+  const { mockCourses, mockAssignments, mockCertificates, mockSurveys, mockAttendance } = useData()
+  const student = useStudent()
+  const myCourses = mockCourses.filter(c => student?.courses?.includes(c.id))
+  const myAsgn    = mockAssignments.filter(a => student?.courses?.includes(a.courseId))
+  const pending   = myAsgn.filter(a => !a.submissions.find(s => s.studentId === student?.id))
+  const myCerts   = mockCertificates.filter(c => c.studentId === student?.id)
+  const unreadSurveys = mockSurveys.filter(s => !s.responses.find(r => r.studentId === student?.id))
   return (
     <div className="space-y-5 animate-fadeIn">
       <div className="rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-700 p-5 text-white">
@@ -52,10 +55,10 @@ function StDash({ onNavigate }) {
         <p className="text-white/50 text-sm mt-1">Attendance: {student?.attendanceRate}% · GPA: {student?.gpa}</p>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="My Courses"     value={myCourses.length}    icon={BookOpen}   color="blue"   onClick={()=>onNavigate('courses')}     clickLabel="View courses"/>
-        <StatCard label="Pending Tasks"  value={pending.length}      icon={FileText}   color="amber"  onClick={()=>onNavigate('assignments')} clickLabel="Submit assignments"/>
-        <StatCard label="Surveys"        value={unreadSurveys.length}icon={Send}       color="teal"   onClick={()=>onNavigate('surveys')}    clickLabel="Fill surveys"/>
-        <StatCard label="Certificates"   value={myCerts.length}      icon={Award}      color="sky"    onClick={()=>onNavigate('certificates')}clickLabel="View certificates"/>
+        <StatCard label="My Courses"     value={myCourses.length}     icon={BookOpen} color="blue"  onClick={()=>onNavigate('courses')}     clickLabel="View courses"/>
+        <StatCard label="Pending Tasks"  value={pending.length}       icon={FileText} color="amber" onClick={()=>onNavigate('assignments')} clickLabel="Submit assignments"/>
+        <StatCard label="Surveys"        value={unreadSurveys.length} icon={Send}     color="teal"  onClick={()=>onNavigate('surveys')}    clickLabel="Fill surveys"/>
+        <StatCard label="Certificates"   value={myCerts.length}       icon={Award}    color="sky"   onClick={()=>onNavigate('certificates')}clickLabel="View certificates"/>
       </div>
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
@@ -71,9 +74,9 @@ function StDash({ onNavigate }) {
         <Card>
           <SectionHeader title="My Attendance"/>
           <div className="flex gap-3 mb-3">
-            {mockCourses.filter(c=>student?.courses?.includes(c.id)).map(c=>{
-              const recs=mockAttendance.filter(a=>a.courseId===c.id&&a.studentId===MY_STUDENT_ID)
-              const rate=recs.length?Math.round(recs.filter(r=>r.status==='present').length/recs.length*100):0
+            {myCourses.map(c=>{
+              const recs = mockAttendance.filter(a=>a.courseId===c.id&&a.studentId===student?.id)
+              const rate = recs.length?Math.round(recs.filter(r=>r.status==='present').length/recs.length*100):0
               return <MiniStat key={c.id} label={c.name.split(' ')[0]} value={`${rate}%`} color={rate>=80?'green':rate>=60?'amber':'red'}/>
             })}
           </div>
@@ -89,7 +92,8 @@ function StDash({ onNavigate }) {
 }
 
 function StCourses() {
-  const student = me()
+  const { mockCourses } = useData()
+  const student = useStudent()
   return (
     <div className="space-y-3 animate-fadeIn">
       {mockCourses.filter(c=>student?.courses?.includes(c.id)).map(c=>(
@@ -120,18 +124,19 @@ function StCourses() {
 
 function StAssignments() {
   const { pushNotif } = useAuth()
-  const student = me()
+  const { mockAssignments, mockCourses, submitAssignment } = useData()
+  const student = useStudent()
   const myAsgn  = mockAssignments.filter(a=>student?.courses?.includes(a.courseId))
   const [file, setFile] = useState({})
-  const submit = (a)=>{
-    submitAssignment(a.id, MY_STUDENT_ID, student?.name, file[a.id]?.name||'submission.pdf')
-    pushNotif('instructor',`${student?.name} submitted "${a.title}"`, 'assignment')
+  const submit = async (a) => {
+    await submitAssignment(a.id, student?.id, student?.name, file[a.id]?.name||'submission.pdf')
+    await pushNotif('instructor', `${student?.name} submitted "${a.title}"`, 'assignment')
     setFile({...file,[a.id]:null})
   }
   return (
     <div className="space-y-4 animate-fadeIn">
       {myAsgn.map(a=>{
-        const mySub=a.submissions.find(s=>s.studentId===MY_STUDENT_ID)
+        const mySub=a.submissions.find(s=>s.studentId===student?.id)
         return (
           <Card key={a.id}>
             <div className="flex justify-between mb-2"><div><p className="font-semibold text-gray-900">{a.title}</p><p className="text-xs text-gray-400">{mockCourses.find(c=>c.id===a.courseId)?.name} · Due: {a.dueDate}</p></div><StatusBadge status={mySub?.status||'pending'}/></div>
@@ -165,22 +170,23 @@ function StAssignments() {
 
 function StQuizzes() {
   const { pushNotif } = useAuth()
-  const student = me()
+  const { mockQuizzes, mockCourses, submitQuiz } = useData()
+  const student = useStudent()
   const myQuizzes = mockQuizzes.filter(q=>student?.courses?.includes(q.courseId))
   const [taking, setTaking] = useState(null)
   const [answers, setAnswers] = useState({})
-  const [result, setResult] = useState(null)
+  const [result, setResult]  = useState(null)
   const start = q=>{ setTaking(q); setAnswers({}); setResult(null) }
-  const finish = ()=>{
-    const ans = taking.questions.map((_,i)=>answers[i]??-1)
-    const score = submitQuiz(taking.id, MY_STUDENT_ID, student?.name, ans)
-    pushNotif('instructor',`${student?.name} completed quiz "${taking.title}" — Score: ${score}%`, 'quiz')
+  const finish = async () => {
+    const ans   = taking.questions.map((_,i)=>answers[i]??-1)
+    const score = await submitQuiz(taking.id, student?.id, student?.name, ans)
+    await pushNotif('instructor', `${student?.name} completed quiz "${taking.title}" — Score: ${score}%`, 'quiz')
     setResult(score); setTaking(null)
   }
   return (
     <div className="space-y-4 animate-fadeIn">
       {myQuizzes.map(q=>{
-        const mySub = q.submissions.find(s=>s.studentId===MY_STUDENT_ID)
+        const mySub = q.submissions.find(s=>s.studentId===student?.id)
         return (
           <Card key={q.id}>
             <div className="flex justify-between mb-2"><div><p className="font-semibold">{q.title}</p><p className="text-xs text-gray-400">{mockCourses.find(c=>c.id===q.courseId)?.name} · {q.questions.length} questions · {q.duration} min · Due: {q.dueDate}</p></div>
@@ -224,8 +230,9 @@ function StQuizzes() {
 }
 
 function StLiveClass() {
-  const student = me()
-  const myMeetings = mockMeetings.filter(m=>m.participantRoles?.includes('student')||m.courseId&&student?.courses?.includes(m.courseId))
+  const { mockMeetings } = useData()
+  const student = useStudent()
+  const myMeetings = mockMeetings.filter(m=>m.participantRoles?.includes('student')||(m.courseId&&student?.courses?.includes(m.courseId)))
   return (
     <div className="space-y-3 animate-fadeIn">
       {myMeetings.length===0&&<Card className="text-center py-10 text-gray-400 text-sm">No live classes scheduled yet</Card>}
@@ -244,16 +251,17 @@ function StLiveClass() {
 }
 
 function StAttendance() {
-  const student = me()
-  const recs = mockAttendance.filter(a=>a.studentId===MY_STUDENT_ID)
+  const { mockAttendance, mockCourses } = useData()
+  const student = useStudent()
+  const recs    = mockAttendance.filter(a=>a.studentId===student?.id)
   const present = recs.filter(r=>r.status==='present').length
-  const rate = recs.length?Math.round(present/recs.length*100):0
+  const rate    = recs.length?Math.round(present/recs.length*100):0
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex gap-3">
         <MiniStat label="Present" value={present} color="green"/>
         <MiniStat label="Absent"  value={recs.filter(r=>r.status==='absent').length} color="red"/>
-        <MiniStat label="Late"    value={recs.filter(r=>r.status==='late').length} color="amber"/>
+        <MiniStat label="Late"    value={recs.filter(r=>r.status==='late').length}   color="amber"/>
         <MiniStat label="Rate"    value={`${rate}%`} color="blue"/>
       </div>
       <Card><Table columns={[{key:'courseId',label:'Course',render:v=>mockCourses.find(c=>c.id===v)?.name?.split(' ')[0]||`#${v}`},{key:'date',label:'Date'},{key:'status',label:'Status',render:v=><StatusBadge status={v}/>}]} data={recs} emptyMsg="No attendance records."/></Card>
@@ -262,19 +270,20 @@ function StAttendance() {
 }
 
 function StGrades() {
-  const student = me()
-  const myAsgn  = mockAssignments.filter(a=>student?.courses?.includes(a.courseId))
+  const { mockAssignments, mockQuizzes } = useData()
+  const student   = useStudent()
+  const myAsgn    = mockAssignments.filter(a=>student?.courses?.includes(a.courseId))
   const myQuizzes = mockQuizzes.filter(q=>student?.courses?.includes(q.courseId))
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex gap-3"><MiniStat label="Overall GPA" value={student?.gpa} color="blue"/><MiniStat label="Attendance" value={`${student?.attendanceRate}%`} color="green"/><MiniStat label="Status" value={student?.status} color={student?.status==='active'?'green':'red'}/></div>
       <Card>
         <SectionHeader title="Assignments"/>
-        {myAsgn.map(a=>{const s=a.submissions.find(x=>x.studentId===MY_STUDENT_ID);return <div key={a.id} className="flex justify-between py-2 border-b border-gray-50 last:border-0 text-sm"><span className="text-gray-800">{a.title}</span><div className="flex gap-2">{s?s.status==='graded'?<Badge color="green">{s.grade}/100</Badge>:<Badge color="amber">Submitted</Badge>:<Badge color="gray">Not submitted</Badge>}</div></div>})}
+        {myAsgn.map(a=>{const s=a.submissions.find(x=>x.studentId===student?.id);return <div key={a.id} className="flex justify-between py-2 border-b border-gray-50 last:border-0 text-sm"><span className="text-gray-800">{a.title}</span><div className="flex gap-2">{s?s.status==='graded'?<Badge color="green">{s.grade}/100</Badge>:<Badge color="amber">Submitted</Badge>:<Badge color="gray">Not submitted</Badge>}</div></div>})}
       </Card>
       <Card>
         <SectionHeader title="Quizzes"/>
-        {myQuizzes.map(q=>{const s=q.submissions.find(x=>x.studentId===MY_STUDENT_ID);return <div key={q.id} className="flex justify-between py-2 border-b border-gray-50 last:border-0 text-sm"><span className="text-gray-800">{q.title}</span>{s?<Badge color={s.score>=70?'green':'red'}>{s.overrideGrade??s.score}%</Badge>:<Badge color="gray">Not taken</Badge>}</div>})}
+        {myQuizzes.map(q=>{const s=q.submissions.find(x=>x.studentId===student?.id);return <div key={q.id} className="flex justify-between py-2 border-b border-gray-50 last:border-0 text-sm"><span className="text-gray-800">{q.title}</span>{s?<Badge color={s.score>=70?'green':'red'}>{s.overrideGrade??s.score}%</Badge>:<Badge color="gray">Not taken</Badge>}</div>})}
       </Card>
     </div>
   )
@@ -282,18 +291,19 @@ function StGrades() {
 
 function StSurveys() {
   const { pushNotif } = useAuth()
-  const student = me()
-  const [answers, setAnswers] = useState({})
-  const [comment, setComment] = useState({})
+  const { mockSurveys, submitSurveyResponse } = useData()
+  const student   = useStudent()
+  const [answers, setAnswers]   = useState({})
+  const [comment, setComment]   = useState({})
   const [submitted, setSubmitted] = useState({})
-  const submit = (sv)=>{
-    submitSurveyResponse(sv.id, MY_STUDENT_ID, student?.name, answers[sv.id]||{}, comment[sv.id]||'')
+  const submit = async (sv) => {
+    await submitSurveyResponse(sv.id, student?.id, student?.name, answers[sv.id]||{}, comment[sv.id]||'')
     setSubmitted({...submitted,[sv.id]:true})
   }
   return (
     <div className="space-y-4 animate-fadeIn">
       {mockSurveys.filter(s=>s.status==='active').map(sv=>{
-        const already = sv.responses.find(r=>r.studentId===MY_STUDENT_ID) || submitted[sv.id]
+        const already = sv.responses.find(r=>r.studentId===student?.id)||submitted[sv.id]
         return (
           <Card key={sv.id}>
             <div className="flex justify-between mb-3"><div><p className="font-semibold">{sv.title}</p><p className="text-xs text-gray-400">By {sv.createdBy} · Due: {sv.deadline}</p></div>{already?<Badge color="green">Completed ✓</Badge>:<Badge color="amber">Pending</Badge>}</div>
@@ -323,13 +333,14 @@ function StSurveys() {
 
 function StComplaints() {
   const { pushNotif } = useAuth()
-  const student = me()
+  const { mockComplaints, addComplaint } = useData()
+  const student = useStudent()
   const [modal, setModal] = useState(false)
   const [form, setForm]   = useState({subject:'',desc:'',priority:'medium'})
-  const mine = mockComplaints.filter(c=>c.fromId===MY_STUDENT_ID)
-  const submit = ()=>{
-    addComplaint({fromId:MY_STUDENT_ID,from:student?.name,fromRole:'student',subject:form.subject,desc:form.desc,assignedTo:'Student Affairs Assistant',priority:form.priority,status:'pending',date:new Date().toISOString().split('T')[0]})
-    pushNotif('affairs',`Student complaint: "${form.subject}"`, 'complaint')
+  const mine = mockComplaints.filter(c=>c.fromId===student?.id)
+  const submit = async () => {
+    await addComplaint({fromId:student?.id,from:student?.name,fromRole:'student',subject:form.subject,desc:form.desc,assignedTo:'Student Affairs Assistant',priority:form.priority,status:'pending'})
+    await pushNotif('affairs', `Student complaint: "${form.subject}"`, 'complaint')
     setModal(false); setForm({subject:'',desc:'',priority:'medium'})
   }
   return (
@@ -349,8 +360,10 @@ function StComplaints() {
 }
 
 function StCertificates() {
+  const { mockCertificates } = useData()
+  const student = useStudent()
   const [viewCert, setViewCert] = useState(null)
-  const myCerts = mockCertificates.filter(c=>c.studentId===MY_STUDENT_ID)
+  const myCerts = mockCertificates.filter(c=>c.studentId===student?.id)
   return (
     <div className="space-y-4 animate-fadeIn">
       {myCerts.length===0&&<Card className="text-center py-10 text-gray-400 text-sm">No certificates yet. Complete a course to earn one!</Card>}

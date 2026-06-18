@@ -2,8 +2,8 @@ import { useState } from 'react'
 import Sidebar from '../../components/layout/Sidebar'
 import Header from '../../components/layout/Header'
 import { StatCard, StatusBadge, Badge, Table, SectionHeader, Modal, ProgressBar, MiniStat, SelectFilter, Card, FileUploadBox, CertificatePDF } from '../../components/ui'
-import { getStats, mockStudents, mockCourses, mockInstructors, mockComplaints, mockMeetings, mockTasks, mockReports, mockMessages, mockCertificates, mockSurveys, mockAttendance, attendanceChart, addMeeting, addTask, updateTask, addReport, sendMessage, issueCertificate, addSurvey } from '../../utils/mockData'
 import { useAuth } from '../../context/AuthContext'
+import { useData } from '../../context/DataContext'
 import { GraduationCap, Users, BookOpen, AlertCircle, Calendar, BarChart3, CheckSquare, Send, Plus, ExternalLink, Award, ClipboardList } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
@@ -35,6 +35,8 @@ export default function PrincipalPortal() {
 }
 
 function PrinDash({ onNavigate }) {
+  const { user } = useAuth()
+  const { getStats, attendanceChart, mockCourses, mockStudents, mockInstructors, mockComplaints, mockMeetings, mockTasks, mockAttendance } = useData()
   const stats = getStats()
   const [drill, setDrill] = useState(null)
   return (
@@ -43,7 +45,7 @@ function PrinDash({ onNavigate }) {
         <div className="flex justify-between items-start">
           <div>
             <p className="text-white/60 text-xs">Academy Leadership</p>
-            <h2 className="font-bold text-2xl mt-0.5">Principal 🏛️</h2>
+            <h2 className="font-bold text-2xl mt-0.5">{user?.name} 🏛️</h2>
             <p className="text-white/50 text-sm mt-1">Click any stat to drill down · Full academy oversight</p>
           </div>
           <div className="text-5xl opacity-10">🏛️</div>
@@ -81,7 +83,6 @@ function PrinDash({ onNavigate }) {
         </ResponsiveContainer>
       </Card>
 
-      {/* Modals */}
       <Modal open={drill==='students'} onClose={()=>setDrill(null)} title="Students by Course" wide>
         <div className="space-y-3">
           <div className="flex gap-2 mb-3"><MiniStat label="Total" value={stats.totalStudents} color="blue"/><MiniStat label="Active" value={stats.activeStudents} color="green"/><MiniStat label="At Risk" value={stats.atRisk} color="red"/></div>
@@ -150,6 +151,7 @@ function PrinDash({ onNavigate }) {
 }
 
 function PrinTeam() {
+  const { mockTasks } = useData()
   const TEAM = [
     {id:1,name:'Mohammad Abdullah',role:'Foundation Lead',    dept:'Foundation',  status:'active',tasks:mockTasks.filter(t=>t.assignedToRole==='foundation_lead').length},
     {id:2,name:'Asad',             role:'Training Ops Mgr',  dept:'Operations',  status:'active',tasks:mockTasks.filter(t=>t.assignedTo==='Asad').length},
@@ -175,6 +177,7 @@ function PrinTeam() {
 }
 
 function PrinStudents() {
+  const { mockStudents, mockCourses } = useData()
   const [cid, setCid] = useState('')
   const filtered = mockStudents.filter(s=>cid===''||s.courses?.includes(parseInt(cid)))
   return (
@@ -191,12 +194,13 @@ function PrinStudents() {
 }
 
 function PrinCourses() {
+  const { mockCourses, mockStudents } = useData()
   const [sel, setSel] = useState(null)
   return (
     <div className="space-y-3 animate-fadeIn">
       {mockCourses.map(c=>(
         <Card key={c.id} className="cursor-pointer hover:shadow-md transition-all" onClick={()=>setSel(c)}>
-          <div className="flex justify-between mb-2"><div><p className="font-semibold text-gray-900">{c.name}</p><p className="text-xs text-gray-400">{c.instructor} · {c.students} students</p></div><Badge color="teal">{c.progress}%</Badge></div>
+          <div className="flex justify-between mb-2"><div><p className="font-semibold text-gray-900">{c.name}</p><p className="text-xs text-gray-400">{c.instructor} · {c.enrolledStudents?.length||0} students</p></div><Badge color="teal">{c.progress}%</Badge></div>
           <ProgressBar value={c.progress} color="teal" size="lg"/>
           <p className="text-[10px] text-blue-500 mt-2">↗ Click to see enrolled students</p>
         </Card>
@@ -209,6 +213,7 @@ function PrinCourses() {
 }
 
 function PrinComplaints() {
+  const { mockComplaints } = useData()
   const [priority, setPriority] = useState('')
   const filtered = mockComplaints.filter(c=>priority===''||c.priority===priority)
   return (
@@ -229,29 +234,27 @@ function PrinComplaints() {
 }
 
 function PrinTasks() {
-  const { pushNotif } = useAuth()
-  const [tasks, setTasks] = useState(mockTasks)
+  const { user, pushNotif } = useAuth()
+  const { mockTasks, addTask } = useData()
   const [modal, setModal] = useState(false)
   const [form, setForm]   = useState({title:'',assignedTo:'Asad',assignedToRole:'training_ops',dueDate:'',priority:'medium',note:''})
-  // Principal assigns to: Asad, Stuart, Nida (NOT Foundation Lead — he has his own)
   const TEAM = [
     {name:'Asad',   role:'training_ops'},
     {name:'Stuart', role:'training_ops'},
     {name:'Nida',   role:'nida'},
   ]
-  const add = ()=>{
+  const add = async ()=>{
     if(!form.title) return
     const t=TEAM.find(x=>x.name===form.assignedTo)
-    addTask({...form,assignedToRole:t?.role||'training_ops'})
-    pushNotif(t?.role||'training_ops',`Task from Principal: "${form.title}"`, 'task')
-    setTasks([...mockTasks]); setModal(false)
-    setForm({title:'',assignedTo:'Asad',assignedToRole:'training_ops',dueDate:'',priority:'medium',note:''})
+    await addTask({...form,assignedBy:user?.name,assignedToRole:t?.role||'training_ops'})
+    await pushNotif(t?.role||'training_ops',`Task from ${user?.name}: "${form.title}"`, 'task')
+    setModal(false); setForm({title:'',assignedTo:'Asad',assignedToRole:'training_ops',dueDate:'',priority:'medium',note:''})
   }
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Assign Task</button></div>
       <Card>
-        <Table columns={[{key:'title',label:'Task',render:v=><span className="font-medium">{v}</span>},{key:'assignedTo',label:'Assigned To'},{key:'dueDate',label:'Due'},{key:'priority',label:'Priority',render:v=><Badge color={v==='high'?'red':v==='medium'?'amber':'green'}>{v}</Badge>},{key:'status',label:'Status',render:v=><StatusBadge status={v}/>}]} data={tasks}/>
+        <Table columns={[{key:'title',label:'Task',render:v=><span className="font-medium">{v}</span>},{key:'assignedTo',label:'Assigned To'},{key:'dueDate',label:'Due'},{key:'priority',label:'Priority',render:v=><Badge color={v==='high'?'red':v==='medium'?'amber':'green'}>{v}</Badge>},{key:'status',label:'Status',render:v=><StatusBadge status={v}/>}]} data={mockTasks}/>
       </Card>
       <Modal open={modal} onClose={()=>setModal(false)} title="Assign Task">
         <div className="space-y-4">
@@ -272,20 +275,20 @@ function PrinTasks() {
 }
 
 function PrinSurveys() {
-  const { pushNotif } = useAuth()
+  const { user, pushNotif } = useAuth()
+  const { mockSurveys, mockStudents, addSurvey } = useData()
   const [modal, setModal] = useState(false)
-  const [surveys, setSurveys] = useState(mockSurveys)
-  const [form, setForm]       = useState({title:'',deadline:'',questions:['','']})
-  const create = ()=>{
+  const [form, setForm]   = useState({title:'',deadline:'',questions:['','']})
+  const create = async ()=>{
     const qs = form.questions.filter(q=>q.trim()).map((q,i)=>({id:i+1,text:q}))
-    addSurvey({title:form.title,createdBy:'Principal',deadline:form.deadline,status:'active',sentTo:'students',questions:qs,sent:mockStudents.length})
-    pushNotif('student',`New survey from Principal: "${form.title}"`, 'survey')
-    setSurveys([...mockSurveys]); setModal(false)
+    await addSurvey({title:form.title,createdBy:user?.name,deadline:form.deadline,status:'active',sentTo:'students',questions:qs,sent:mockStudents.length})
+    await pushNotif('student',`New survey from ${user?.name}: "${form.title}"`, 'survey')
+    setModal(false); setForm({title:'',deadline:'',questions:['','']})
   }
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Create Survey</button></div>
-      {surveys.map(s=>(
+      {mockSurveys.map(s=>(
         <Card key={s.id}>
           <div className="flex justify-between mb-2"><div><p className="font-semibold text-gray-900">{s.title}</p><p className="text-xs text-gray-400">By {s.createdBy} · Due: {s.deadline}</p></div><StatusBadge status={s.status}/></div>
           <div className="flex items-center gap-3"><span className="text-sm font-bold text-violet-600">{s.responses.length}</span><span className="text-xs text-gray-400">/ {s.sent} responded</span><div className="flex-1"><ProgressBar value={(s.responses.length/s.sent)*100} color="purple" size="lg"/></div></div>
@@ -313,26 +316,25 @@ function PrinSurveys() {
 }
 
 function PrinCertificates() {
-  const { pushNotif } = useAuth()
+  const { user, pushNotif } = useAuth()
+  const { mockStudents, mockCourses, mockCertificates, issueCertificate } = useData()
   const [modal, setModal] = useState(false)
   const [viewCert, setViewCert] = useState(null)
-  const [certs, setCerts] = useState(mockCertificates)
   const [form, setForm]   = useState({studentId:'',courseId:'',grade:'A'})
-  const issue = ()=>{
+  const issue = async ()=>{
     const s = mockStudents.find(x=>x.id===parseInt(form.studentId))
     const c = mockCourses.find(x=>x.id===parseInt(form.courseId))
     if(!s||!c) return
-    issueCertificate({studentId:s.id,studentName:s.name,courseId:c.id,courseName:c.name,issuedBy:'Principal',grade:form.grade})
-    pushNotif('student',`Certificate issued: "${c.name}"`, 'certificate')
-    setCerts([...mockCertificates]); setModal(false)
-    setForm({studentId:'',courseId:'',grade:'A'})
+    await issueCertificate({studentId:s.id,studentName:s.name,courseId:c.id,courseName:c.name,issuedBy:user?.name,grade:form.grade})
+    await pushNotif('student',`Certificate issued: "${c.name}"`, 'certificate')
+    setModal(false); setForm({studentId:'',courseId:'',grade:'A'})
   }
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Award className="w-3.5 h-3.5"/>Issue Certificate</button></div>
       <Card>
         <SectionHeader title="Issued Certificates"/>
-        <Table columns={[{key:'studentName',label:'Student'},{key:'courseName',label:'Course'},{key:'grade',label:'Grade'},{key:'issuedBy',label:'Issued By'},{key:'issuedAt',label:'Date'},{key:'id',label:'',render:(_,row)=><button onClick={()=>setViewCert(row)} className="text-xs text-blue-600 hover:underline">View</button>}]} data={certs}/>
+        <Table columns={[{key:'studentName',label:'Student'},{key:'courseName',label:'Course'},{key:'grade',label:'Grade'},{key:'issuedBy',label:'Issued By'},{key:'issuedAt',label:'Date'},{key:'id',label:'',render:(_,row)=><button onClick={()=>setViewCert(row)} className="text-xs text-blue-600 hover:underline">View</button>}]} data={mockCertificates}/>
       </Card>
       <Modal open={modal} onClose={()=>setModal(false)} title="Issue Certificate">
         <div className="space-y-4">
@@ -348,12 +350,12 @@ function PrinCertificates() {
 }
 
 function PrinMeetings() {
-  const { pushNotif } = useAuth()
-  const [meetings, setMeets] = useState(mockMeetings)
-  const [modal, setModal]    = useState(false)
-  const [form, setForm]      = useState({title:'',date:'',link:'',platform:'teams',invitees:[]})
+  const { user, pushNotif } = useAuth()
+  const { mockMeetings, addMeeting } = useData()
+  const [modal, setModal] = useState(false)
+  const [form, setForm]   = useState({title:'',date:'',link:'',platform:'teams',invitees:[]})
   const ALLOWED = [
-    {name:'Captain Turki',                    role:'captain'},
+    {name:'Captain',                          role:'captain'},
     {name:'Mohammad Abdullah (Foundation Lead)', role:'foundation_lead'},
     {name:'Asad (Training Ops)',              role:'training_ops'},
     {name:'Stuart (Training Ops)',            role:'training_ops'},
@@ -362,17 +364,16 @@ function PrinMeetings() {
     {name:'Abdulaziz (Quality)',              role:'academic'},
   ]
   const toggle = (name,role)=>{const e=form.invitees.find(i=>i.name===name);setForm({...form,invitees:e?form.invitees.filter(i=>i.name!==name):[...form.invitees,{name,role}]})}
-  const create = ()=>{
+  const create = async ()=>{
     if(!form.title||!form.date) return
-    addMeeting({...form,createdBy:'Principal',createdByRole:'principal',participants:['Principal',...form.invitees.map(i=>i.name)],participantRoles:['principal',...form.invitees.map(i=>i.role)],status:'upcoming'})
-    form.invitees.forEach(i=>pushNotif(i.role,`Principal scheduled: "${form.title}"`, 'meeting'))
-    setMeets([...mockMeetings]); setModal(false)
-    setForm({title:'',date:'',link:'',platform:'teams',invitees:[]})
+    await addMeeting({...form,createdBy:user?.name,createdByRole:'principal',participants:[user?.name,...form.invitees.map(i=>i.name)],participantRoles:['principal',...form.invitees.map(i=>i.role)],status:'upcoming'})
+    for (const i of form.invitees) await pushNotif(i.role,`${user?.name} scheduled: "${form.title}"`, 'meeting')
+    setModal(false); setForm({title:'',date:'',link:'',platform:'teams',invitees:[]})
   }
   return (
     <div className="space-y-3 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Schedule Meeting</button></div>
-      {meetings.map(m=>(
+      {mockMeetings.map(m=>(
         <Card key={m.id} className="flex justify-between items-start">
           <div>
             <div className="flex gap-2 mb-1"><p className="font-semibold text-gray-900">{m.title}</p><StatusBadge status={m.status}/>{m.participantRoles?.includes('principal')&&m.createdByRole!=='principal'&&<Badge color="purple">Invited</Badge>}</div>
@@ -407,14 +408,15 @@ function PrinMeetings() {
 }
 
 function PrinReports() {
-  const { pushNotif } = useAuth()
-  const [form, setForm] = useState({to:'captain',type:'Academy Summary',period:'July 2024',content:''})
+  const { user, pushNotif } = useAuth()
+  const { mockReports, addReport } = useData()
+  const [form, setForm] = useState({to:'captain',type:'Academy Summary',period:'',content:''})
   const [file, setFile] = useState(null)
   const [sent, setSent] = useState(false)
-  const send = ()=>{
+  const send = async ()=>{
     if(!form.content.trim()) return
-    addReport({from:'Principal',fromRole:'principal',to:form.to==='captain'?'Captain Turki':'Foundation Lead',type:form.type,period:form.period,content:form.content+(file?` [File: ${file.name}]`:''),fileName:file?.name||null})
-    pushNotif(form.to,`Report from Principal: "${form.type}"`, 'report')
+    await addReport({from:user?.name,fromRole:'principal',to:form.to==='captain'?'Captain':'Foundation Lead',type:form.type,period:form.period,content:form.content+(file?` [File: ${file.name}]`:''),fileName:file?.name||null})
+    await pushNotif(form.to,`Report from ${user?.name}: "${form.type}"`, 'report')
     setSent(true); setTimeout(()=>setSent(false),2500)
   }
   return (
@@ -422,9 +424,9 @@ function PrinReports() {
       <Card>
         <SectionHeader title="Submit Report"/>
         <div className="space-y-3">
-          <div><label className="label">Send To</label><select className="input" value={form.to} onChange={e=>setForm({...form,to:e.target.value})}><option value="captain">Captain Turki</option><option value="foundation_lead">Foundation Lead</option></select></div>
+          <div><label className="label">Send To</label><select className="input" value={form.to} onChange={e=>setForm({...form,to:e.target.value})}><option value="captain">Captain</option><option value="foundation_lead">Foundation Lead</option></select></div>
           <div><label className="label">Report Type</label><select className="input" value={form.type} onChange={e=>setForm({...form,type:e.target.value})}><option>Academy Summary</option><option>Student Performance</option><option>Complaint Report</option><option>Operations Report</option><option>Quality Report</option></select></div>
-          <div><label className="label">Period</label><select className="input" value={form.period} onChange={e=>setForm({...form,period:e.target.value})}><option>July 2024</option><option>June 2024</option><option>Q3 2024</option></select></div>
+          <div><label className="label">Period</label><input className="input" value={form.period} onChange={e=>setForm({...form,period:e.target.value})} placeholder="e.g. July 2024"/></div>
           <div><label className="label">Content</label><textarea className="input" rows={4} value={form.content} onChange={e=>setForm({...form,content:e.target.value})} placeholder="Report details…"/></div>
           <FileUploadBox onFile={setFile} label="Attach File (optional)" hint="Upload PDF, DOCX, Excel, or image"/>
           {sent?<div className="p-2.5 bg-green-50 text-green-700 rounded-xl text-xs text-center font-medium">✓ Report sent!</div>:<button onClick={send} className="btn-primary w-full"><Send className="w-3.5 h-3.5"/>Send Report</button>}
@@ -447,15 +449,16 @@ function PrinReports() {
 }
 
 function PrinMessages() {
-  const { pushNotif } = useAuth()
+  const { user, pushNotif } = useAuth()
+  const { mockMessages, sendMessage } = useData()
   const [form, setForm] = useState({to:'foundation_lead',text:''})
   const msgs = mockMessages.filter(m=>m.fromRole==='principal'||m.toRole==='principal')
-  const CONTACTS = [{role:'captain',name:'Captain Turki'},{role:'foundation_lead',name:'Mohammad Abdullah'},{role:'training_ops',name:'Asad / Stuart'},{role:'nida',name:'Nida'},{role:'academic',name:'Academic Team'}]
-  const send = ()=>{
+  const CONTACTS = [{role:'captain',name:'Captain'},{role:'foundation_lead',name:'Mohammad Abdullah'},{role:'training_ops',name:'Asad / Stuart'},{role:'nida',name:'Nida'},{role:'academic',name:'Academic Team'}]
+  const send = async ()=>{
     if(!form.text.trim()) return
     const c=CONTACTS.find(x=>x.role===form.to)
-    sendMessage({fromRole:'principal',from:'Principal',toRole:form.to,to:c?.name,text:form.text})
-    pushNotif(form.to,`Message from Principal: "${form.text.slice(0,50)}"`, 'message')
+    await sendMessage({fromRole:'principal',from:user?.name,toRole:form.to,to:c?.name,text:form.text})
+    await pushNotif(form.to,`Message from ${user?.name}: "${form.text.slice(0,50)}"`, 'message')
     setForm({...form,text:''})
   }
   return (
