@@ -1244,16 +1244,19 @@ function CaptainTasks() {
   const [priorityF,    setPriorityF]    = useState('')
   const [form, setForm] = useState({title:'',assignedToRole:'',dueDate:'',priority:'medium',note:''})
 
-  const filtered = mockTasks.filter(t=>
+  // Captain sees only tasks they created (delegated to others) or assigned to them
+  const myTasks = mockTasks.filter(t=>t.createdByRole==='captain'||t.assignedToRole==='captain')
+
+  const filtered = myTasks.filter(t=>
     (statusFilter===''||t.status===statusFilter) &&
     (priorityF===''||t.priority===priorityF)
   )
 
-  const total      = mockTasks.length
-  const pending    = mockTasks.filter(t=>t.status==='pending').length
-  const inProgress = mockTasks.filter(t=>t.status==='in-progress').length
-  const completed  = mockTasks.filter(t=>t.status==='completed').length
-  const rejected   = mockTasks.filter(t=>t.status==='rejected').length
+  const total      = myTasks.length
+  const pending    = myTasks.filter(t=>t.status==='pending').length
+  const inProgress = myTasks.filter(t=>t.status==='in-progress').length
+  const completed  = myTasks.filter(t=>t.status==='completed').length
+  const rejected   = myTasks.filter(t=>t.status==='rejected').length
   const completePct = total>0 ? Math.round(completed/total*100) : 0
 
   const statusData = [
@@ -1265,8 +1268,8 @@ function CaptainTasks() {
 
   const byRole = TASK_ASSIGNEES.map(a=>({
     name: a.name.split(' ')[0],
-    total: mockTasks.filter(t=>t.assignedToRole===a.role).length,
-    done:  mockTasks.filter(t=>t.assignedToRole===a.role&&t.status==='completed').length,
+    total: myTasks.filter(t=>t.assignedToRole===a.role).length,
+    done:  myTasks.filter(t=>t.assignedToRole===a.role&&t.status==='completed').length,
   }))
 
   const create = async () => {

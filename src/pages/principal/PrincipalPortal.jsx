@@ -474,7 +474,7 @@ function PrinMeetings() {
   return (
     <div className="space-y-3 animate-fadeIn">
       <div className="flex justify-end"><button onClick={()=>setModal(true)} className="btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Schedule Meeting</button></div>
-      {mockMeetings.map(m=>(
+      {mockMeetings.filter(m=>m.createdByRole==='principal'||m.participantRoles?.includes('principal')).map(m=>(
         <Card key={m.id} className="flex justify-between items-start">
           <div>
             <div className="flex gap-2 mb-1"><p className="font-semibold text-gray-900">{m.title}</p><StatusBadge status={m.status}/>{m.participantRoles?.includes('principal')&&m.createdByRole!=='principal'&&<Badge color="purple">Invited</Badge>}</div>
@@ -536,7 +536,7 @@ function PrinReports() {
       <Card>
         <SectionHeader title="Report History"/>
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {mockReports.map(r=>(
+          {mockReports.filter(r=>r.fromRole==='principal'||r.toRole==='principal').map(r=>(
             <div key={r.id} className="p-3 border border-gray-100 rounded-xl">
               <div className="flex justify-between mb-1"><p className="text-xs font-semibold text-gray-900">{r.type}</p><Badge color="purple">{r.fromRole}</Badge></div>
               <p className="text-[10px] text-gray-400">To: {r.to} · {r.sentAt}</p>
