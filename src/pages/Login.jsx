@@ -8,14 +8,14 @@ const ROLE_CARDS = [
   { role:'foundation_lead', label:'Foundation Lead',               emoji:'🧭', sub:'Foundation Department Portal',        grad:'from-blue-600 to-blue-900'       },
   { role:'affairs',         label:'Affairs Team',                  emoji:'📋', sub:'Student & Trainee Affairs Portal',    grad:'from-teal-500 to-emerald-700'    },
   { role:'training_ops',    label:'Training Operations Manager',   emoji:'🎯', sub:'Operations Management Portal',        grad:'from-amber-600 to-yellow-700'    },
-  { role:'nida',            label:'Student Services — Nida',       emoji:'🌟', sub:'Student Services Coordinator Portal', grad:'from-pink-500 to-rose-700'       },
+  { role:'nida',            label:'Student Services ',       emoji:'🌟', sub:'Student Services Coordinator Portal', grad:'from-pink-500 to-rose-700'       },
   { role:'academic',        label:'Academic Team',                 emoji:'📐', sub:'Academic Administration Portal',      grad:'from-emerald-600 to-green-800'   },
   { role:'instructor',      label:'Instructor',                    emoji:'📚', sub:'Course Instructor Portal',             grad:'from-indigo-500 to-violet-700'   },
   { role:'student',         label:'Student',                       emoji:'🎓', sub:'Student Learning Portal',              grad:'from-sky-500 to-cyan-700'        },
 ]
 
 export default function Login() {
-  const { login } = useAuth()
+  const { loginWithRoleCheck } = useAuth()
   const [step, setStep]         = useState('select')
   const [selected, setSelected] = useState(null)
   const [email, setEmail]       = useState('')
@@ -38,7 +38,7 @@ export default function Login() {
     if (!pw.trim())    { setErr('Please enter your password'); return }
     setLoading(true)
     setErr('')
-    const result = await login(email.trim(), pw)
+    const result = await loginWithRoleCheck(email.trim(), pw, selected.role)
     if (result.error) { setErr(result.error); setLoading(false) }
   }
 

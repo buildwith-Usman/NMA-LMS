@@ -14,11 +14,27 @@ const ROLE_COLOR = {
   academic:'bg-emerald-600', instructor:'bg-indigo-600', student:'bg-sky-500',
 }
 
-export default function Header({ title }) {
+// Map notification type → navigation key so clicks route to the right module
+const TYPE_TO_MODULE = {
+  assignment: 'assignments', grade: 'assignments',
+  quiz: 'quizzes', assessment: 'quizzes',
+  meeting: 'meetings', liveclass: 'liveclass',
+  report: 'reports', complaint: 'complaints',
+  survey: 'surveys', attendance: 'attendance',
+  certificate: 'certificates',
+}
+
+export default function Header({ title, onNavigate }) {
   const { user, notifs, readAll, readOne } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const unread = notifs.filter(n => n.unread).length
+
+  const handleNotifClick = (n) => {
+    readOne(n.id)
+    const target = n.module || TYPE_TO_MODULE[n.type]
+    if (onNavigate && target) { onNavigate(target); setOpen(false) }
+  }
 
   // Close on outside click
   useEffect(() => {
@@ -75,7 +91,7 @@ export default function Header({ title }) {
               {notifs.length === 0
                 ? <div className="py-10 text-center text-xs text-gray-400">No notifications</div>
                 : notifs.map(n => (
-                  <div key={n.id} onClick={() => readOne(n.id)}
+                  <div key={n.id} onClick={() => handleNotifClick(n)}
                     className={clsx('px-4 py-3 flex items-start gap-3 cursor-pointer hover:bg-gray-50 transition-colors', n.unread && 'bg-blue-50/60')}>
                     <span className="text-sm mt-0.5 flex-shrink-0">{NOTIF_ICONS[n.type] || 'ℹ️'}</span>
                     <div className="min-w-0 flex-1">
@@ -93,7 +109,7 @@ export default function Header({ title }) {
 
             {/* Footer */}
             <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/50">
-              <p className="text-[10px] text-gray-400 text-center">Click a notification to mark as read</p>
+              <p className="text-[10px] text-gray-400 text-center">Click a notification to open the relevant module</p>
             </div>
           </div>
         )}

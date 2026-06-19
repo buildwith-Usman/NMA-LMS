@@ -5,6 +5,7 @@ import { StatCard, StatusBadge, Badge, Table, SectionHeader, Modal, ProgressBar,
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { GraduationCap, Users, BookOpen, AlertCircle, Calendar, BarChart3, CheckSquare, Send, Plus, ExternalLink, Award, ClipboardList } from 'lucide-react'
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 const PAGES = { dashboard:'Foundation Dashboard', team:'My Team', courses:'Courses', students:'Students', attendance:'Attendance', complaints:'Complaints', tasks:'Assign Tasks', surveys:'Surveys', certificates:'Certificates', meetings:'Meetings', messages:'Messages', reports:'Reports' }
 
@@ -36,9 +37,30 @@ export default function FoundationPortal() {
 
 function FLDash() {
   const { user } = useAuth()
-  const { getStats, mockCourses, mockStudents, mockComplaints, mockTasks, mockSurveys, mockMeetings, mockAttendance } = useData()
+  const { getStats, attendanceChart, mockCourses, mockStudents, mockComplaints, mockTasks, mockSurveys, mockMeetings, mockAttendance, mockQuizzes } = useData()
   const stats = getStats()
   const [drill, setDrill] = useState(null)
+
+  // Assessment analytics
+  const allSubs  = mockQuizzes.flatMap(q=>q.submissions.map(s=>({...s,passingMarks:q.passingMarks||50})))
+  const passSubs = allSubs.filter(s=>(s.overrideGrade??s.score)>=s.passingMarks).length
+  const failSubs = allSubs.length - passSubs
+  const passRate = allSubs.length?Math.round(passSubs/allSubs.length*100):0
+  const PCOLS    = ['#22c55e','#ef4444']
+  const pieData  = [{name:'Pass',value:passSubs},{name:'Fail',value:failSubs}]
+
+  // Survey analytics
+  const totalResponses = mockSurveys.reduce((a,s)=>a+s.responses.length,0)
+  const totalSent      = mockSurveys.reduce((a,s)=>a+(s.sent||0),0)
+  const surveyRate     = totalSent>0?Math.round(totalResponses/totalSent*100):0
+
+  // Complaint breakdown
+  const complaintData = [
+    {name:'High',    count:mockComplaints.filter(c=>c.priority==='high').length,    fill:'#ef4444'},
+    {name:'Medium',  count:mockComplaints.filter(c=>c.priority==='medium').length,  fill:'#f59e0b'},
+    {name:'Low',     count:mockComplaints.filter(c=>c.priority==='low').length,     fill:'#22c55e'},
+  ]
+
   return (
     <div className="space-y-5 animate-fadeIn">
       <div className="rounded-2xl bg-gradient-to-r from-blue-700 to-blue-900 p-5 text-white">
@@ -69,6 +91,69 @@ function FLDash() {
           <StatCard label="Active Surveys"     value={stats.activeSurveys}      icon={ClipboardList} color="purple" onClick={()=>setDrill('surveys')}    clickLabel="View surveys"/>
           <StatCard label="Meetings"           value={stats.upcomingMeetings}   icon={Calendar}      color="indigo" onClick={()=>setDrill('meetings')}   clickLabel="View meetings"/>
         </div>
+      </div>
+
+      <Card>
+        <SectionHeader title="Attendance Trend"/>
+        <ResponsiveContainer width="100%" height={130}>
+          <AreaChart data={attendanceChart}>
+            <defs><linearGradient id="flg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#1d4ed8" stopOpacity={0.15}/><stop offset="95%" stopColor="#1d4ed8" stopOpacity={0}/></linearGradient></defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
+            <XAxis dataKey="week" tick={{fontSize:10,fill:'#9ca3af'}} axisLine={false} tickLine={false}/>
+            <YAxis domain={[0,100]} tick={{fontSize:10,fill:'#9ca3af'}} axisLine={false} tickLine={false} unit="%"/>
+            <Tooltip contentStyle={{borderRadius:10,border:'none'}}/>
+            <Area type="monotone" dataKey="rate" stroke="#1d4ed8" strokeWidth={2} fill="url(#flg)"/>
+          </AreaChart>
+        </ResponsiveContainer>
+      </Card>
+
+      <div className="grid lg:grid-cols-3 gap-4">
+        <Card>
+          <SectionHeader title="Assessment Results"/>
+          <div className="flex gap-2 mb-2">
+            <MiniStat label="Pass" value={passSubs} color="green"/>
+            <MiniStat label="Fail" value={failSubs} color="red"/>
+            <MiniStat label="Rate" value={`${passRate}%`} color={passRate>=70?'green':'amber'}/>
+          </div>
+          {allSubs.length>0?(
+            <ResponsiveContainer width="100%" height={120}>
+              <PieChart>
+                <Pie data={pieData} dataKey="value" cx="50%" cy="50%" outerRadius={42} label={({name,value})=>`${name}: ${value}`} labelLine={false}>
+                  {pieData.map((_,i)=><Cell key={i} fill={PCOLS[i]}/>)}
+                </Pie>
+                <Tooltip/>
+              </PieChart>
+            </ResponsiveContainer>
+          ):<p className="text-xs text-gray-400 text-center py-4">No submissions yet</p>}
+        </Card>
+        <Card>
+          <SectionHeader title="Survey Participation"/>
+          <div className="flex gap-2 mb-3">
+            <MiniStat label="Surveys"   value={stats.activeSurveys} color="purple"/>
+            <MiniStat label="Responses" value={totalResponses}      color="blue"/>
+            <MiniStat label="Rate"      value={`${surveyRate}%`}    color={surveyRate>=60?'green':'amber'}/>
+          </div>
+          <ProgressBar value={surveyRate} color="purple" size="lg"/>
+          {mockSurveys.slice(0,3).map(s=>(
+            <div key={s.id} className="flex justify-between items-center mt-2 text-xs">
+              <span className="text-gray-600 truncate max-w-[120px]">{s.title}</span>
+              <span className="text-purple-600 font-semibold">{s.sent?Math.round(s.responses.length/s.sent*100):0}%</span>
+            </div>
+          ))}
+        </Card>
+        <Card>
+          <SectionHeader title="Complaints by Priority"/>
+          <ResponsiveContainer width="100%" height={140}>
+            <BarChart data={complaintData} margin={{top:4,right:4,left:-28,bottom:4}}>
+              <XAxis dataKey="name" tick={{fontSize:9}}/>
+              <YAxis tick={{fontSize:9}} allowDecimals={false}/>
+              <Tooltip/>
+              <Bar dataKey="count" radius={[3,3,0,0]}>
+                {complaintData.map((d,i)=><Cell key={i} fill={d.fill}/>)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
       </div>
 
       <Modal open={drill==='students'} onClose={()=>setDrill(null)} title="Students by Course" wide>

@@ -33,24 +33,38 @@ const normCourse = c => ({
 
 const normAssignment = a => ({
   id: a.id, courseId: a.course_id, title: a.title,
-  description: a.description || '', dueDate: a.due_date || '',
-  maxGrade: a.max_grade || 100, status: a.status || 'active',
+  description: a.description || '',
+  instructions: a.instructions || '',
+  totalMarks: a.total_marks || a.max_grade || 100,
+  maxGrade: a.max_grade || 100,
+  dueDate: a.due_date || '',
+  fileName: a.file_name || null,
+  status: a.status || 'active',
   submissions: (a.assignment_submissions || []).map(s => ({
     studentId: s.student_id, studentName: s.student_name || '',
-    file: s.file || '', submittedAt: s.submitted_at || '',
+    file: s.file || '', text: s.text || '',
+    submittedAt: s.submitted_at || '',
     grade: s.grade, feedback: s.feedback || '', status: s.status || 'submitted',
   })),
 })
 
 const normQuiz = q => ({
   id: q.id, courseId: q.course_id, title: q.title,
-  duration: q.duration || 15, dueDate: q.due_date || '', status: q.status || 'active',
+  assessmentType: q.assessment_type || 'quiz',
+  duration: q.duration || 15, dueDate: q.due_date || '',
+  totalMarks: q.total_marks || 100,
+  passingMarks: q.passing_marks || 50,
+  instructions: q.instructions || '',
+  status: q.status || 'active',
   questions: (q.quiz_questions || []).sort((a, b) => (a.order_num || 0) - (b.order_num || 0)).map(qq => ({
-    id: qq.id, text: qq.text, options: qq.options, correct: qq.correct,
+    id: qq.id, text: qq.text,
+    type: qq.question_type || 'mcq',
+    options: qq.options || [], correct: qq.correct,
   })),
   submissions: (q.quiz_submissions || []).map(s => ({
     studentId: s.student_id, studentName: s.student_name || '',
-    answers: s.answers || [], score: s.score || 0,
+    answers: s.answers || [], textAnswers: s.text_answers || {},
+    score: s.score || 0, hasSubjective: s.has_subjective || false,
     submittedAt: s.submitted_at || '', overrideGrade: s.override_grade ?? null, feedback: s.feedback || '',
   })),
 })
@@ -88,6 +102,7 @@ const normTask = t => ({
   id: t.id, title: t.title, assignedTo: t.assigned_to || '',
   assignedToRole: t.assigned_to_role || '', dueDate: t.due_date || '',
   priority: t.priority || 'medium', status: t.status || 'pending', note: t.note || '',
+  createdBy: t.created_by || '', createdByRole: t.created_by_role || '',
 })
 
 const normCertificate = c => ({
@@ -98,8 +113,11 @@ const normCertificate = c => ({
 
 const normReport = r => ({
   id: r.id, from: r.from_name || '', fromRole: r.from_role || '',
-  to: r.to_name || '', type: r.type || '', period: r.period || '',
+  to: r.to_name || '', toRole: r.to_role || '',
+  type: r.type || '', period: r.period || '',
   content: r.content || '', sentAt: r.sent_at || '', fileName: r.file_name || null,
+  status: r.status || 'received',
+  feedback: r.feedback || '',
 })
 
 const normMessage = m => ({
@@ -121,6 +139,22 @@ const normAttendance = a => ({
   courseId: a.course_id, date: a.date || '', status: a.status || 'present',
 })
 
+const normResult = r => ({
+  id: r.id,
+  studentId: r.student_id, studentName: r.student_name || '',
+  courseId: r.course_id, courseName: r.course_name || '',
+  instructorId: r.instructor_id || null,
+  assignmentMarks: parseFloat(r.assignment_marks) || 0,
+  quizMarks:       parseFloat(r.quiz_marks)       || 0,
+  examMarks:       parseFloat(r.exam_marks)       || 0,
+  examTotal:       parseFloat(r.exam_total)       || 100,
+  totalMarks:      parseFloat(r.total_marks)      || 0,
+  grandTotal:      parseFloat(r.grand_total)      || 300,
+  percentage:      parseFloat(r.percentage)       || 0,
+  grade: r.grade || '',
+  createdAt: r.created_at ? r.created_at.split('T')[0] : '',
+})
+
 // ── Context ──────────────────────────────────────────────────────────────────
 
 const DataContext = createContext(null)
@@ -140,6 +174,7 @@ export function DataProvider({ children }) {
   const [mockMessages,    setMockMessages]    = useState([])
   const [mockAdmissions,  setMockAdmissions]  = useState([])
   const [mockAttendance,  setMockAttendance]  = useState([])
+  const [mockResults,     setMockResults]     = useState([])
   const [dataLoading,     setDataLoading]     = useState(true)
 
   useEffect(() => { loadAll() }, [])
@@ -147,7 +182,7 @@ export function DataProvider({ children }) {
   async function loadAll() {
     setDataLoading(true)
     const [studRes, insRes, courseRes, asgRes, qzRes, cmpRes, svRes, mtRes,
-           tskRes, certRes, rptRes, msgRes, admRes, attRes] = await Promise.all([
+           tskRes, certRes, rptRes, msgRes, admRes, attRes, resRes] = await Promise.all([
       supabase.from('students').select('*, enrollments(course_id)'),
       supabase.from('instructors').select('*'),
       supabase.from('courses').select('*, course_youtube_links(*), course_materials(*), enrollments(student_id)'),
@@ -162,6 +197,7 @@ export function DataProvider({ children }) {
       supabase.from('messages').select('*').order('created_at', { ascending: true }),
       supabase.from('admissions').select('*'),
       supabase.from('attendance').select('*'),
+      supabase.from('results').select('*'),
     ])
     setMockStudents((studRes.data || []).map(normStudent))
     setMockInstructors((insRes.data || []).map(normInstructor))
@@ -177,6 +213,7 @@ export function DataProvider({ children }) {
     setMockMessages((msgRes.data || []).map(normMessage))
     setMockAdmissions((admRes.data || []).map(normAdmission))
     setMockAttendance((attRes.data || []).map(normAttendance))
+    setMockResults((resRes.data || []).map(normResult))
     setDataLoading(false)
   }
 
@@ -352,21 +389,28 @@ export function DataProvider({ children }) {
 
   async function addAssignment(a) {
     const { data, error } = await supabase.from('assignments').insert({
-      course_id: a.courseId, title: a.title, description: a.description || '',
-      due_date: a.dueDate, max_grade: a.maxGrade || 100, status: 'active',
+      course_id: a.courseId, title: a.title,
+      description: a.description || '',
+      instructions: a.instructions || '',
+      due_date: a.dueDate,
+      max_grade: a.totalMarks || a.maxGrade || 100,
+      total_marks: a.totalMarks || 100,
+      file_name: a.fileName || null,
+      status: 'active',
     }).select('*, assignment_submissions(*)').single()
     if (!error && data) setMockAssignments(p => [...p, normAssignment(data)])
   }
 
-  async function submitAssignment(asgId, studentId, studentName, file) {
+  async function submitAssignment(asgId, studentId, studentName, file, text = '') {
     const { data, error } = await supabase.from('assignment_submissions').upsert({
       assignment_id: asgId, student_id: studentId, student_name: studentName,
-      file, submitted_at: new Date().toISOString().split('T')[0], status: 'submitted',
+      file: file || '', text: text || '',
+      submitted_at: new Date().toISOString().split('T')[0], status: 'submitted',
     }, { onConflict: 'assignment_id,student_id' }).select('*').single()
     if (!error && data) {
       setMockAssignments(p => p.map(a => {
         if (a.id !== asgId) return a
-        const sub = { studentId, studentName, file, submittedAt: data.submitted_at, grade: null, feedback: '', status: 'submitted' }
+        const sub = { studentId, studentName, file: file || '', text: text || '', submittedAt: data.submitted_at, grade: null, feedback: '', status: 'submitted' }
         const idx = a.submissions.findIndex(s => s.studentId === studentId)
         const subs = [...a.submissions]
         if (idx >= 0) subs[idx] = sub; else subs.push(sub)
@@ -387,31 +431,54 @@ export function DataProvider({ children }) {
 
   async function addQuiz(q) {
     const { data, error } = await supabase.from('quizzes').insert({
-      course_id: q.courseId, title: q.title, duration: q.duration || 15,
-      due_date: q.dueDate, status: 'active',
+      course_id: q.courseId, title: q.title,
+      assessment_type: q.assessmentType || 'quiz',
+      duration: q.duration || 15, due_date: q.dueDate,
+      total_marks: q.totalMarks || 100,
+      passing_marks: q.passingMarks || 50,
+      instructions: q.instructions || '',
+      status: 'active',
     }).select('*').single()
     if (!error && data) {
       if (q.questions?.length) {
         await supabase.from('quiz_questions').insert(
-          q.questions.map((qq, i) => ({ quiz_id: data.id, text: qq.text, options: qq.options, correct: qq.correct, order_num: i }))
+          q.questions.map((qq, i) => ({
+            quiz_id: data.id, text: qq.text,
+            question_type: qq.type || 'mcq',
+            options: qq.options || [],
+            correct: ['mcq','true_false'].includes(qq.type||'mcq') ? qq.correct : null,
+            order_num: i,
+          }))
         )
       }
-      setMockQuizzes(p => [...p, normQuiz({ ...data, quiz_questions: q.questions || [], quiz_submissions: [] })])
+      setMockQuizzes(p => [...p, normQuiz({
+        ...data,
+        quiz_questions: q.questions.map((qq, i) => ({ ...qq, question_type: qq.type || 'mcq', order_num: i })),
+        quiz_submissions: [],
+      })])
     }
   }
 
-  async function submitQuiz(qzId, studentId, studentName, answers) {
+  async function submitQuiz(qzId, studentId, studentName, answers, textAnswers = {}) {
     const quiz = mockQuizzes.find(q => q.id === qzId)
     if (!quiz) return 0
-    const score = Math.round(answers.reduce((acc, a, i) => acc + (a === quiz.questions[i]?.correct ? 1 : 0), 0) / Math.max(quiz.questions.length, 1) * 100)
+    const autoQs = quiz.questions.filter(q => ['mcq','true_false'].includes(q.type || 'mcq'))
+    const correct = answers.filter((a, i) => {
+      const q = quiz.questions[i]
+      return ['mcq','true_false'].includes(q?.type||'mcq') && a === q.correct
+    }).length
+    const score = autoQs.length > 0 ? Math.round(correct / autoQs.length * 100) : 0
+    const hasSubjective = quiz.questions.some(q => !['mcq','true_false'].includes(q.type||'mcq'))
     const { data, error } = await supabase.from('quiz_submissions').upsert({
       quiz_id: qzId, student_id: studentId, student_name: studentName,
-      answers, score, submitted_at: new Date().toISOString().split('T')[0],
+      answers, text_answers: textAnswers, score,
+      has_subjective: hasSubjective,
+      submitted_at: new Date().toISOString().split('T')[0],
     }, { onConflict: 'quiz_id,student_id' }).select('*').single()
     if (!error) {
       setMockQuizzes(p => p.map(q => {
         if (q.id !== qzId) return q
-        const sub = { studentId, studentName, answers, score, submittedAt: data?.submitted_at || '', overrideGrade: null, feedback: '' }
+        const sub = { studentId, studentName, answers, textAnswers, score, hasSubjective, submittedAt: data?.submitted_at || '', overrideGrade: null, feedback: '' }
         const idx = q.submissions.findIndex(s => s.studentId === studentId)
         const subs = [...q.submissions]
         if (idx >= 0) subs[idx] = sub; else subs.push(sub)
@@ -485,6 +552,72 @@ export function DataProvider({ children }) {
     }
   }
 
+  async function addYoutubeLink(courseId, title, url) {
+    const { data, error } = await supabase.from('course_youtube_links')
+      .insert({ course_id: courseId, title, url })
+      .select('*').single()
+    if (!error && data) {
+      setMockCourses(p => p.map(c => c.id === courseId
+        ? { ...c, youtubeLinks: [...(c.youtubeLinks || []), { id: data.id, title: data.title, url: data.url }] }
+        : c
+      ))
+    }
+  }
+
+  async function removeYoutubeLink(linkId, courseId) {
+    const { error } = await supabase.from('course_youtube_links').delete().eq('id', linkId)
+    if (!error) {
+      setMockCourses(p => p.map(c => c.id === courseId
+        ? { ...c, youtubeLinks: c.youtubeLinks.filter(l => l.id !== linkId) }
+        : c
+      ))
+    }
+  }
+
+  async function addCourseMaterial(courseId, name, size) {
+    const { data, error } = await supabase.from('course_materials')
+      .insert({ course_id: courseId, name, size: size || '', date: new Date().toISOString().split('T')[0] })
+      .select('*').single()
+    if (!error && data) {
+      setMockCourses(p => p.map(c => c.id === courseId
+        ? { ...c, materials: [...(c.materials || []), { id: data.id, name: data.name, size: data.size, date: data.date }] }
+        : c
+      ))
+    }
+  }
+
+  async function removeCourseMaterial(materialId, courseId) {
+    const { error } = await supabase.from('course_materials').delete().eq('id', materialId)
+    if (!error) {
+      setMockCourses(p => p.map(c => c.id === courseId
+        ? { ...c, materials: c.materials.filter(m => m.id !== materialId) }
+        : c
+      ))
+    }
+  }
+
+  async function addLiveClass(lc) {
+    const course = mockCourses.find(c => c.id === lc.courseId)
+    const enrolledStudents = mockStudents.filter(s => course?.enrolledStudents?.includes(s.id))
+    const { data, error } = await supabase.from('meetings').insert({
+      title: lc.title, created_by: lc.createdBy, created_by_role: 'instructor',
+      date: lc.date, link: lc.link || '', status: 'upcoming',
+      platform: lc.platform || 'teams', course_id: lc.courseId,
+    }).select('*').single()
+    if (!error && data) {
+      const participants = [
+        { name: lc.createdBy, role: 'instructor' },
+        ...enrolledStudents.map(s => ({ name: s.name, role: 'student' })),
+      ]
+      if (participants.length) {
+        await supabase.from('meeting_participants').insert(
+          participants.map(p => ({ meeting_id: data.id, name: p.name, role: p.role }))
+        )
+      }
+      setMockMeetings(prev => [...prev, normMeeting({ ...data, meeting_participants: participants })])
+    }
+  }
+
   async function addMeeting(m) {
     const { data, error } = await supabase.from('meetings').insert({
       title: m.title, created_by: m.createdBy, created_by_role: m.createdByRole,
@@ -501,6 +634,22 @@ export function DataProvider({ children }) {
       }
       setMockMeetings(p => [...p, normMeeting({ ...data, meeting_participants: participants.map((name, i) => ({ name, role: roles[i] || '' })) })])
     }
+  }
+
+  async function updateMeeting(id, updates) {
+    const row = {}
+    if (updates.title    !== undefined) row.title    = updates.title
+    if (updates.date     !== undefined) row.date     = updates.date
+    if (updates.link     !== undefined) row.link     = updates.link
+    if (updates.platform !== undefined) row.platform = updates.platform
+    if (updates.status   !== undefined) row.status   = updates.status
+    const { error } = await supabase.from('meetings').update(row).eq('id', id)
+    if (!error) setMockMeetings(p => p.map(m => m.id === id ? { ...m, ...updates } : m))
+  }
+
+  async function deleteMeeting(id) {
+    const { error } = await supabase.from('meetings').delete().eq('id', id)
+    if (!error) setMockMeetings(p => p.filter(m => m.id !== id))
   }
 
   async function sendMessage(m) {
@@ -528,17 +677,43 @@ export function DataProvider({ children }) {
     }
   }
 
+  async function notifyRole(role, text, type = 'info', module = null) {
+    let userIds = []
+    if (role === 'student') {
+      const { data } = await supabase.from('students').select('auth_id').not('auth_id', 'is', null)
+      userIds = (data || []).map(s => s.auth_id).filter(Boolean)
+    } else if (role === 'instructor') {
+      const { data } = await supabase.from('instructors').select('auth_id').not('auth_id', 'is', null)
+      userIds = (data || []).map(i => i.auth_id).filter(Boolean)
+    } else {
+      const { data } = await supabase.from('profiles').select('id').eq('role', role)
+      userIds = (data || []).map(p => p.id)
+    }
+    if (userIds.length) {
+      await supabase.from('notifications').insert(
+        userIds.map(uid => ({ user_id: uid, text, type, unread: true, ...(module && { module }) }))
+      )
+    }
+  }
+
   async function addTask(t) {
     const { data, error } = await supabase.from('tasks').insert({
       title: t.title, assigned_to: t.assignedTo, assigned_to_role: t.assignedToRole,
       due_date: t.dueDate, priority: t.priority || 'medium', status: 'pending', note: t.note || '',
+      created_by: t.createdBy || '', created_by_role: t.createdByRole || '',
     }).select('*').single()
     if (!error && data) setMockTasks(p => [...p, normTask(data)])
   }
 
   async function updateTask(id, status) {
+    const task = mockTasks.find(t => t.id === id)
     const { error } = await supabase.from('tasks').update({ status }).eq('id', id)
-    if (!error) setMockTasks(p => p.map(t => t.id === id ? { ...t, status } : t))
+    if (!error) {
+      setMockTasks(p => p.map(t => t.id === id ? { ...t, status } : t))
+      if (task?.createdByRole) {
+        await notifyRole(task.createdByRole, `Task "${task.title}" was marked "${status}" by ${task.assignedTo}`, 'task')
+      }
+    }
   }
 
   async function issueCertificate(c) {
@@ -553,10 +728,26 @@ export function DataProvider({ children }) {
 
   async function addReport(r) {
     const { data, error } = await supabase.from('reports').insert({
-      from_name: r.from, from_role: r.fromRole, to_name: r.to,
-      type: r.type, period: r.period, content: r.content, file_name: r.fileName || null,
+      from_name: r.from, from_role: r.fromRole,
+      to_name: r.to, to_role: r.toRole || '',
+      type: r.type, period: r.period, content: r.content,
+      file_name: r.fileName || null,
+      status: 'received', feedback: '',
     }).select('*').single()
-    if (!error && data) setMockReports(p => [...p, normReport(data)])
+    if (!error && data) {
+      setMockReports(p => [...p, normReport(data)])
+      if (r.toRole) {
+        await notifyRole(r.toRole, `New report from ${r.from}: "${r.type} — ${r.period}"`, 'report')
+      }
+    }
+  }
+
+  async function updateReport(id, { status, feedback }) {
+    const updates = {}
+    if (status   !== undefined) updates.status   = status
+    if (feedback !== undefined) updates.feedback = feedback
+    const { error } = await supabase.from('reports').update(updates).eq('id', id)
+    if (!error) setMockReports(p => p.map(r => r.id === id ? { ...r, ...updates } : r))
   }
 
   async function addAdmission(a) {
@@ -568,6 +759,33 @@ export function DataProvider({ children }) {
     if (!error && data) setMockAdmissions(p => [...p, normAdmission(data)])
   }
 
+  async function addResult(r) {
+    const { data, error } = await supabase.from('results').upsert({
+      student_id:       r.studentId,
+      student_name:     r.studentName,
+      course_id:        r.courseId,
+      course_name:      r.courseName,
+      instructor_id:    r.instructorId || null,
+      assignment_marks: r.assignmentMarks || 0,
+      quiz_marks:       r.quizMarks       || 0,
+      exam_marks:       r.examMarks       || 0,
+      exam_total:       r.examTotal       || 100,
+      total_marks:      r.totalMarks      || 0,
+      grand_total:      r.grandTotal      || 300,
+      percentage:       r.percentage      || 0,
+      grade:            r.grade           || '',
+      updated_at:       new Date().toISOString(),
+    }, { onConflict: 'student_id,course_id' }).select('*').single()
+    if (!error && data) {
+      const norm = normResult(data)
+      setMockResults(p => {
+        const idx = p.findIndex(x => x.studentId === r.studentId && x.courseId === r.courseId)
+        if (idx >= 0) { const n = [...p]; n[idx] = norm; return n }
+        return [...p, norm]
+      })
+    }
+  }
+
   async function updateAdmission(id, data) {
     const row = {}
     if (data.status !== undefined)        row.status = data.status
@@ -575,7 +793,30 @@ export function DataProvider({ children }) {
     if (data.notes !== undefined)         row.notes = data.notes
     if (data.docs !== undefined)          row.docs = data.docs
     const { error } = await supabase.from('admissions').update(row).eq('id', id)
-    if (!error) setMockAdmissions(p => p.map(a => a.id === id ? { ...a, ...data } : a))
+    if (!error) {
+      setMockAdmissions(p => p.map(a => a.id === id ? { ...a, ...data } : a))
+      if (data.status === 'accepted') {
+        const admission = mockAdmissions.find(a => a.id === id)
+        if (admission && !mockStudents.find(s => s.email === admission.email)) {
+          const { data: sd, error: se } = await supabase.from('students').insert({
+            name: admission.name, email: admission.email, phone: admission.phone || '',
+            admission_date: admission.appliedDate || new Date().toISOString().split('T')[0],
+            status: 'active', attendance_rate: 0, gpa: 0,
+          }).select('*, enrollments(course_id)').single()
+          if (!se && sd) {
+            const ns = normStudent(sd)
+            const course = mockCourses.find(c => c.name === admission.program)
+            if (course) {
+              await supabase.from('enrollments').insert({ student_id: ns.id, course_id: course.id })
+              ns.courses = [course.id]
+              setMockCourses(p => p.map(c => c.id === course.id
+                ? { ...c, enrolledStudents: [...c.enrolledStudents, ns.id] } : c))
+            }
+            setMockStudents(p => [...p, ns])
+          }
+        }
+      }
+    }
   }
 
   return (
@@ -592,10 +833,12 @@ export function DataProvider({ children }) {
       addQuiz, submitQuiz, overrideQuizGrade,
       addComplaint, updateComplaint,
       addSurvey, submitSurveyResponse,
-      addMeeting, sendMessage, markAttendance,
+      addYoutubeLink, removeYoutubeLink, addCourseMaterial, removeCourseMaterial, addLiveClass,
+      addMeeting, updateMeeting, deleteMeeting, sendMessage, markAttendance,
       addTask, updateTask,
-      issueCertificate, addReport,
+      issueCertificate, addReport, updateReport,
       addAdmission, updateAdmission,
+      mockResults, addResult,
     }}>
       {children}
     </DataContext.Provider>

@@ -5,7 +5,7 @@ import { StatCard, StatusBadge, Badge, Table, SectionHeader, Modal, ProgressBar,
 import { useAuth } from '../../context/AuthContext'
 import { useData } from '../../context/DataContext'
 import { GraduationCap, Users, BookOpen, AlertCircle, Calendar, BarChart3, CheckSquare, Send, Plus, ExternalLink, Award, ClipboardList } from 'lucide-react'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 
 const PAGES = { dashboard:'Principal Dashboard', team:'My Team', students:'Students', courses:'Courses', complaints:'Complaints', tasks:'Assign Tasks', surveys:'Surveys', certificates:'Certificates', meetings:'Meetings', reports:'Reports', messages:'Messages' }
 
@@ -36,9 +36,34 @@ export default function PrincipalPortal() {
 
 function PrinDash({ onNavigate }) {
   const { user } = useAuth()
-  const { getStats, attendanceChart, mockCourses, mockStudents, mockInstructors, mockComplaints, mockMeetings, mockTasks, mockAttendance } = useData()
+  const { getStats, attendanceChart, mockCourses, mockStudents, mockInstructors, mockComplaints, mockMeetings, mockTasks, mockAttendance, mockSurveys, mockQuizzes, mockCertificates } = useData()
   const stats = getStats()
   const [drill, setDrill] = useState(null)
+
+  // Assessment analytics
+  const allSubs   = mockQuizzes.flatMap(q=>q.submissions.map(s=>({...s,passingMarks:q.passingMarks||50})))
+  const passSubs  = allSubs.filter(s=>(s.overrideGrade??s.score)>=s.passingMarks).length
+  const failSubs  = allSubs.length - passSubs
+  const passRate  = allSubs.length?Math.round(passSubs/allSubs.length*100):0
+  const PCOLS     = ['#22c55e','#ef4444']
+  const pieData   = [{name:'Pass',value:passSubs},{name:'Fail',value:failSubs}]
+
+  // Survey analytics
+  const totalResponses = mockSurveys.reduce((a,s)=>a+s.responses.length,0)
+  const totalSent      = mockSurveys.reduce((a,s)=>a+(s.sent||0),0)
+  const surveyRate     = totalSent>0?Math.round(totalResponses/totalSent*100):0
+
+  // Complaint breakdown for bar chart
+  const complaintData = [
+    {name:'Pending', count:mockComplaints.filter(c=>c.status==='pending').length,   fill:'#f59e0b'},
+    {name:'In Review',count:mockComplaints.filter(c=>c.status==='in-review').length,fill:'#3b82f6'},
+    {name:'Resolved',count:mockComplaints.filter(c=>c.status==='resolved').length,  fill:'#22c55e'},
+  ]
+
+  // Certificate trend by month
+  const certByMonth = mockCertificates.reduce((acc,c)=>{const m=c.issuedAt?.slice(0,7)||'Unknown';acc[m]=(acc[m]||0)+1;return acc},{})
+  const certData = Object.entries(certByMonth).sort().slice(-6).map(([m,count])=>({month:m.slice(5),count}))
+
   return (
     <div className="space-y-5 animate-fadeIn">
       <div className="rounded-2xl bg-gradient-to-r from-violet-700 to-purple-900 p-5 text-white">
@@ -82,6 +107,82 @@ function PrinDash({ onNavigate }) {
           </AreaChart>
         </ResponsiveContainer>
       </Card>
+
+      <div className="grid lg:grid-cols-3 gap-4">
+        <Card>
+          <SectionHeader title="Assessment Results"/>
+          <div className="flex gap-2 mb-2">
+            <MiniStat label="Pass" value={passSubs} color="green"/>
+            <MiniStat label="Fail" value={failSubs} color="red"/>
+            <MiniStat label="Rate" value={`${passRate}%`} color={passRate>=70?'green':'amber'}/>
+          </div>
+          {allSubs.length>0?(
+            <ResponsiveContainer width="100%" height={120}>
+              <PieChart>
+                <Pie data={pieData} dataKey="value" cx="50%" cy="50%" outerRadius={42} label={({name,value})=>`${name}: ${value}`} labelLine={false}>
+                  {pieData.map((_,i)=><Cell key={i} fill={PCOLS[i]}/>)}
+                </Pie>
+                <Tooltip/>
+              </PieChart>
+            </ResponsiveContainer>
+          ):<p className="text-xs text-gray-400 text-center py-4">No submissions yet</p>}
+        </Card>
+        <Card>
+          <SectionHeader title="Survey Participation"/>
+          <div className="flex gap-2 mb-3">
+            <MiniStat label="Surveys" value={stats.activeSurveys} color="purple"/>
+            <MiniStat label="Responses" value={totalResponses} color="blue"/>
+            <MiniStat label="Rate" value={`${surveyRate}%`} color={surveyRate>=60?'green':'amber'}/>
+          </div>
+          <ProgressBar value={surveyRate} color="purple" size="lg"/>
+          {mockSurveys.slice(0,3).map(s=>(
+            <div key={s.id} className="flex justify-between items-center mt-2 text-xs">
+              <span className="text-gray-600 truncate max-w-[120px]">{s.title}</span>
+              <span className="text-purple-600 font-semibold">{s.sent?Math.round(s.responses.length/s.sent*100):0}%</span>
+            </div>
+          ))}
+        </Card>
+        <Card>
+          <SectionHeader title="Complaints Overview"/>
+          <ResponsiveContainer width="100%" height={140}>
+            <BarChart data={complaintData} margin={{top:4,right:4,left:-28,bottom:4}}>
+              <XAxis dataKey="name" tick={{fontSize:9}}/>
+              <YAxis tick={{fontSize:9}} allowDecimals={false}/>
+              <Tooltip/>
+              <Bar dataKey="count" radius={[3,3,0,0]}>
+                {complaintData.map((d,i)=><Cell key={i} fill={d.fill}/>)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Card>
+          <SectionHeader title="Certificates Issued"/>
+          <MiniStat label="Total" value={stats.totalCertificates} color="sky"/>
+          {certData.length>0?(
+            <ResponsiveContainer width="100%" height={100}>
+              <BarChart data={certData} margin={{top:8,right:4,left:-28,bottom:0}}>
+                <XAxis dataKey="month" tick={{fontSize:9}}/>
+                <YAxis tick={{fontSize:9}} allowDecimals={false}/>
+                <Tooltip/>
+                <Bar dataKey="count" fill="#0ea5e9" radius={[3,3,0,0]}/>
+              </BarChart>
+            </ResponsiveContainer>
+          ):<p className="text-xs text-gray-400 text-center py-4">No certificates yet</p>}
+        </Card>
+        <Card>
+          <SectionHeader title="Course Progress"/>
+          {mockCourses.slice(0,4).map(c=>(
+            <div key={c.id} className="mb-2">
+              <div className="flex justify-between text-xs mb-1"><span className="text-gray-700 truncate max-w-[160px]">{c.name}</span><span className="font-semibold text-teal-600">{c.progress}%</span></div>
+              <ProgressBar value={c.progress} color="teal"/>
+            </div>
+          ))}
+          {mockCourses.length===0&&<p className="text-xs text-gray-400 text-center py-4">No courses</p>}
+        </Card>
+      </div>
 
       <Modal open={drill==='students'} onClose={()=>setDrill(null)} title="Students by Course" wide>
         <div className="space-y-3">

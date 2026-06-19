@@ -172,8 +172,8 @@ export function FileUploadBox({ onFile, accept = '*', label = 'Attach File', req
   )
 }
 
-export function Card({ children, className }) {
-  return <div className={clsx('bg-white rounded-2xl border border-gray-100 p-4 shadow-sm', className)}>{children}</div>
+export function Card({ children, className, ...props }) {
+  return <div {...props} className={clsx('bg-white rounded-2xl border border-gray-100 p-4 shadow-sm', className)}>{children}</div>
 }
 
 export function CertificatePDF({ cert, onClose }) {
