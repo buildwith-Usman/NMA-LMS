@@ -177,7 +177,13 @@ export function DataProvider({ children }) {
   const [mockResults,     setMockResults]     = useState([])
   const [dataLoading,     setDataLoading]     = useState(true)
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => {
+    loadAll()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') loadAll()
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   async function loadAll() {
     setDataLoading(true)
