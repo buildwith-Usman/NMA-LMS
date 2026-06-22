@@ -28,7 +28,7 @@ export default function Sidebar({ activeKey, onNavigate }) {
     <aside className={clsx('h-screen bg-[#0f172a] flex flex-col transition-all duration-300 sticky top-0 z-30 flex-shrink-0', collapsed ? 'w-14' : 'w-56')}>
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-3 py-3.5 border-b border-white/5">
-        <img src="public/nma-logo.png" alt="NMA" className="w-8 h-8 object-contain rounded-lg flex-shrink-0 bg-white/10 p-0.5"/>
+        <img src="/nma-logo.png" alt="NMA" className="w-8 h-8 object-contain rounded-lg flex-shrink-0 bg-white/10 p-0.5"/>
         {!collapsed && (
           <div className="min-w-0">
             <p className="text-white text-xs font-bold leading-tight truncate">NMA LMS</p>
@@ -73,7 +73,7 @@ export default function Sidebar({ activeKey, onNavigate }) {
       <div className="p-2 border-t border-white/5 space-y-1">
         {!collapsed && (
           <div className="flex items-center gap-2 px-2 py-1.5">
-            <img src="public/microbits-logo.jpg" alt="" className="w-4 h-4 object-contain rounded opacity-30"/>
+            <img src="/microbits-logo.jpg" alt="" className="w-4 h-4 object-contain rounded opacity-30"/>
             <span className="text-white/20 text-[9px] truncate">Microbits</span>
           </div>
         )}

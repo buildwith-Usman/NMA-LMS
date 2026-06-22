@@ -178,9 +178,16 @@ export function DataProvider({ children }) {
   const [dataLoading,     setDataLoading]     = useState(true)
 
   useEffect(() => {
+    // Always attempt an initial load; the auth listener below will reload
+    // once the session is confirmed (handles expired tokens and restored sessions)
     loadAll()
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') loadAll()
+      // INITIAL_SESSION = existing session restored on page load (system restart)
+      // SIGNED_IN       = fresh login via login form
+      // TOKEN_REFRESHED = expired token silently refreshed
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        loadAll()
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
